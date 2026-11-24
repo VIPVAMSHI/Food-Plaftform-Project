@@ -12,7 +12,7 @@ import {
   toDateString,
 } from '../shared/dates'
 import { toAssistantPlace } from '../shared/places'
-import type { AssistantSource, LatLon, Plan } from '../shared/types'
+import type { AssistantSource, LatLon, MealMoment, Plan } from '../shared/types'
 import { AiKeyPrompt } from './ai/AiKeyPrompt'
 import { COMFORT_CUISINES, pickForMoment } from './ai/local'
 import { askFoodAssistant } from './ai/provider'
@@ -27,6 +27,8 @@ import { useSeattleClock, useSeattleWeather } from './useSeattle'
 
 /** The demo profile. Change the name here; there is no sign-in. */
 const DEMO_USER = { name: 'Alex Morgan', firstName: 'Alex', initials: 'AM' }
+/** Suggested arrival time in the plan dialog, by current Seattle meal moment. */
+const DEFAULT_TIME: Record<MealMoment, string> = { breakfast: '09:00', lunch: '12:30', dinner: '19:00' }
 
 type ViewPlace = Place & { travel: number; distanceLabel: string; distanceFromUser: number | null }
 type Confirmation = { place: ViewPlace; date: string; time: string }
@@ -281,6 +283,8 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [assistantBusy, setAssistantBusy] = useState(false)
   const sendingRef = useRef(false)
+  /** Area/budget the assistant wrote into the filters, with the value it replaced. They belong to that answer only. */
+  const assistantApplied = useRef<{ area?: { value: string; previous: string }; budget?: { value: string; previous: string } }>({})
   const [assistantPreference, setAssistantPreference] = useState<string | null>(null)
   const [assistantMaxTravel, setAssistantMaxTravel] = useState<number | null>(null)
   const [showChatResults, setShowChatResults] = useState(false)
@@ -360,6 +364,10 @@ export default function App() {
   const selectedDate = formatWhen(date)
   const calendarCells = monthGrid(calendarMonth.year, calendarMonth.month)
   const plansForDay = plans.filter((plan) => plan.date === date)
+  const upcomingElsewhere = plans
+    .filter((plan) => plan.date >= today && plan.date !== date)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+    .slice(0, 5)
 
   function dateKey(day: number): string {
     return toDateString(calendarMonth.year, calendarMonth.month, day)
@@ -392,7 +400,7 @@ export default function App() {
 
   function openSchedule(place: ViewPlace) {
     setSchedulePlace(place)
-    setScheduleTime('')
+    setScheduleTime(DEFAULT_TIME[clock.moment])
     setScheduleError('')
     if (date < today) setDate(today)
   }
@@ -479,26 +487,42 @@ export default function App() {
       setShowChatResults(false)
       setMessages((current) => [...current, { role: 'user', text: trimmed }])
       setAssistantBusy(true)
-      const named = NEIGHBORHOODS.find((name) => name.toLowerCase() === area.trim().toLowerCase()) ?? null
+      const applied = assistantApplied.current
+      const userArea = applied.area && applied.area.value === area ? applied.area.previous : area
+      const userBudget = applied.budget && applied.budget.value === budget ? applied.budget.previous : budget
+      const named = NEIGHBORHOODS.find((name) => name.toLowerCase() === userArea.trim().toLowerCase()) ?? null
       const summaries: AssistantPlace[] = view.map((place) => toAssistantPlace(place, mode))
       const response = await askFoodAssistant(
         {
           message: trimmed,
-          location: area,
+          location: userArea,
           neighborhood: named,
           cuisine: cuisine === 'All food' ? null : cuisine,
           mode,
-          budget: budget ? Number(budget) : null,
+          budget: userBudget ? Number(userBudget) : null,
           mealMoment: clock.moment,
           seattleTime: clock.dateTime,
           userLocation,
         },
         summaries,
       )
-      if (response.preference) setAssistantPreference(response.preference)
-      if (response.maxTravelMinutes) setAssistantMaxTravel(response.maxTravelMinutes)
-      if (response.neighborhood) setArea(response.neighborhood)
-      if (response.maxBudget) setBudget(String(response.maxBudget))
+      // Each answer replaces the filters the previous answer set; filters the user chose stay.
+      setAssistantPreference(response.preference)
+      setAssistantMaxTravel(response.maxTravelMinutes)
+      if (response.neighborhood) {
+        setArea(response.neighborhood)
+        applied.area = { value: response.neighborhood, previous: userArea }
+      } else {
+        if (applied.area) setArea(userArea)
+        applied.area = undefined
+      }
+      if (response.maxBudget) {
+        setBudget(String(response.maxBudget))
+        applied.budget = { value: String(response.maxBudget), previous: userBudget }
+      } else {
+        if (applied.budget) setBudget(userBudget)
+        applied.budget = undefined
+      }
       setReasons(response.reasons)
       setChatIds(response.rankedIds)
       setShowChatResults(response.rankedIds.length > 0)
@@ -566,15 +590,16 @@ export default function App() {
     <main className="stage">
       <section className="phone">
         <header className="topbar">
-          <button type="button" className="avatar" onClick={() => setTab('user')} aria-label="Open profile">
+          <button type="button" className="avatar" onClick={() => setTab('user')} aria-label={`${DEMO_USER.initials}, open profile`}>
             {DEMO_USER.initials}
           </button>
-          <button type="button" className="location" onClick={() => setFiltersOpen(true)} aria-label={`Area: ${area}. Change filters`}>
-            <span>YOUR AREA</span>
+          <button type="button" className="location" onClick={() => setFiltersOpen(true)}>
+            <span>YOUR AREA</span>{' '}
             <strong>
               <Icon name="pin" size={15} />
               <em>{area}</em>
             </strong>
+            <span className="visually-hidden">, change filters</span>
           </button>
           <button type="button" className="icon-btn" data-testid="open-filters" onClick={() => setFiltersOpen(true)} aria-label="Filters">
             <Icon name="sliders" />
@@ -601,13 +626,14 @@ export default function App() {
               )}
               {assistantVisible && (
                 <section className="ai-assistant" data-testid="assistant" aria-label="Food assistant">
-                  <button type="button" className="ai-heading" onClick={() => setAssistantVisible(false)} aria-expanded="true" aria-label="Hide the food assistant">
+                  <button type="button" className="ai-heading" onClick={() => setAssistantVisible(false)} aria-expanded="true">
                     <span className="ai-mark">
                       <Icon name="spark" />
                     </span>
                     <span>
-                      <strong>Your food assistant</strong>
+                      <strong>Your food assistant</strong>{' '}
                       <small data-testid="ai-subtitle">Ask for a cuisine, budget, or time</small>
+                      <span className="visually-hidden">. Hide the assistant</span>
                     </span>
                     <Icon name="close" size={18} />
                   </button>
@@ -690,14 +716,15 @@ export default function App() {
                         {chatPlaces.map((place, index) => (
                           <article className="chat-choice" key={place.id} data-testid="chat-pick" data-place-id={place.id}>
                             <PlacePhoto place={place} />
-                            <button type="button" className="chat-choice-open" onClick={() => setDetails(place)} aria-label={`View details for ${place.name}`}>
+                            <button type="button" className="chat-choice-open" onClick={() => setDetails(place)}>
                               <span>
                                 #{index + 1} · {place.cuisine}
-                              </span>
-                              <strong>{place.name}</strong>
+                              </span>{' '}
+                              <strong>{place.name}</strong>{' '}
                               <small>
                                 ${place.serving}/person · {place.travel} min {mode === 'car' ? 'drive' : mode} · {place.wait} min wait
                               </small>
+                              <span className="visually-hidden">. View details</span>
                             </button>
                             <button type="button" onClick={() => openSchedule(place)} aria-label={`Add ${place.name} to calendar`} data-testid="chat-pick-plan">
                               <Icon name="calendar" size={17} />
@@ -773,7 +800,7 @@ export default function App() {
                   aria-label="Search restaurants, dishes, or cuisines"
                   type="search"
                 />
-                <button type="button" onClick={() => (query ? setQuery('') : searchRef.current?.focus())} aria-label={query ? 'Clear search' : 'Search'}>
+                <button type="button" onClick={() => (query ? setQuery('') : searchRef.current?.focus())} aria-label={query ? 'Clear search' : 'Go to search'}>
                   {query ? '×' : 'GO'}
                 </button>
               </div>
@@ -916,9 +943,7 @@ export default function App() {
                     >
                       <strong>{day}</strong>
                       {dayPlans.slice(0, 2).map((plan) => (
-                        <i key={plan.id} aria-hidden="true">
-                          {PLACE_BY_ID.get(plan.placeId)?.name.slice(0, 1)}
-                        </i>
+                        <i key={plan.id} aria-hidden="true" data-initial={PLACE_BY_ID.get(plan.placeId)?.name.slice(0, 1)} />
                       ))}
                     </button>
                   )
@@ -1051,6 +1076,27 @@ export default function App() {
                     </button>
                   </div>
                 )
+              )}
+              {upcomingElsewhere.length > 0 && (
+                <div className="upcoming" data-testid="upcoming-plans">
+                  <h3>Other upcoming plans</h3>
+                  {upcomingElsewhere.map((plan) => (
+                    <button
+                      type="button"
+                      key={plan.id}
+                      data-testid="upcoming-plan"
+                      onClick={() => {
+                        pickDate(plan.date)
+                        showMonthOf(plan.date)
+                      }}
+                    >
+                      <strong>{PLACE_BY_ID.get(plan.placeId)?.name ?? 'Restaurant'}</strong>
+                      <span>
+                        {formatShortDate(plan.date)} · {formatTime(plan.time)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           )}

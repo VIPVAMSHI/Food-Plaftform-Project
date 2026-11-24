@@ -597,9 +597,10 @@ h3 { margin: 0 0 3px; font-size: 19px; }
   padding: 6px 2px;
 }
 .calendar-day strong { width: 100%; font-size: 12px; font-weight: 600; }
+.calendar-day i::after { content: attr(data-initial); }
 .calendar-day i {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -973,6 +974,26 @@ fieldset { border: 0; padding: 0; margin: 0 0 17px; }
 .search { position: relative; }
 .search input[type='search']::-webkit-search-cancel-button { display: none; }
 
+.upcoming { margin: 18px 0 8px; }
+.upcoming h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.upcoming button {
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  color: var(--ink);
+  text-align: left;
+  font-size: 14px;
+}
+.upcoming button span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
 /* --- Touch targets: at least 44 x 44 px --- */
 .avatar, .icon-btn, .save, .sheet-title button, .detail-close, .calendar-toolbar button { width: 44px; height: 44px; }
 .chip, .transport button, .suggested button, .option-grid button, .back-discover, .reset, .keep-browsing, .edit-plan, .location-permission, .add-another, .edit-panel button { min-height: 44px; }
@@ -985,7 +1006,9 @@ fieldset { border: 0; padding: 0; margin: 0 0 17px; }
 .saved-row { grid-template-columns: 84px 1fr 44px; }
 .saved-row button { width: 44px; height: 44px; display: grid; place-items: center; }
 .search button { min-width: 44px; height: 44px; }
-.edit-panel input { min-height: 40px; }
+.chip { min-width: 44px; }
+.card-actions button { min-height: 44px; }
+.search input, .chat-input input, .field input, .date-picker input, .edit-panel input, .budget-input input { min-height: 44px; }
 
 :focus-visible { outline: 3px solid #2f7dd1; outline-offset: 2px; }
 

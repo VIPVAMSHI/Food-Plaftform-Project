@@ -56,18 +56,17 @@ test.describe('axe: zero critical or serious violations', () => {
 })
 
 /** Safari moves focus only between text fields on Tab; Option+Tab reaches every control. */
-let TAB = 'Tab'
-test.beforeEach(({ browserName }) => {
-  TAB = browserName === 'webkit' ? 'Alt+Tab' : 'Tab'
-})
+/** Derived from the page under test each time, so there is no shared state between tests. */
+const tabKey = (page: Page) => (page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+Tab' : 'Tab')
 
 async function tabTo(page: Page, target: Locator, maxPresses = 80) {
+  const key = tabKey(page)
   const handle = await target.elementHandle()
   for (let i = 0; i < maxPresses; i++) {
     if (await page.evaluate((el) => document.activeElement === el, handle)) return
-    await page.keyboard.press(TAB)
+    await page.keyboard.press(key)
   }
-  throw new Error(`could not reach ${target} with ${TAB}`)
+  throw new Error(`could not reach ${target} with ${key}`)
 }
 
 test.describe('keyboard only', () => {
@@ -110,8 +109,9 @@ test.describe('keyboard only', () => {
     await page.keyboard.press('Enter')
     const sheet = page.getByTestId('filter-sheet')
     await expect(sheet).toBeVisible()
+    const key = tabKey(page)
     for (let i = 0; i < 40; i++) {
-      await page.keyboard.press(TAB)
+      await page.keyboard.press(key)
       expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
     }
     await page.keyboard.press('Escape')

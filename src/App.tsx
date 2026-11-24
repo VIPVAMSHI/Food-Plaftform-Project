@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AiKeyPrompt } from './ai/AiKeyPrompt'
 import { askFoodAssistant } from './ai/provider'
+import { useAiStatus, type AiSetupState } from './ai/useAiStatus'
 import { COMFORT_CUISINES, pickForMoment } from './ai/local'
 import type { AssistantPlace, MealMoment } from './ai/types'
 import { CUISINES, NEIGHBORHOODS, places, type Mode, type Place } from './data/places'
@@ -15,6 +17,13 @@ const MODES: { key: Mode; label: string }[] = [
   { key: 'bike', label: 'Bike' },
   { key: 'car', label: 'Drive' },
 ]
+
+const AI_SUBTITLE: Record<AiSetupState, string> = {
+  checking: 'Checking AI setup…',
+  ready: 'Ask for a cuisine, budget, or time',
+  'missing-key': 'AI is off until an API key is added',
+  'server-offline': "AI is off: the app server isn't running",
+}
 
 function seattleToday(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -258,6 +267,9 @@ export default function App() {
   const [details, setDetails] = useState<ViewPlace | null>(null)
   const [listening, setListening] = useState(false)
   const [locationNote, setLocationNote] = useState('')
+  const ai = useAiStatus()
+  /** Open while AI is not set up. `pending` is the message to send once the prompt closes. */
+  const [keyPrompt, setKeyPrompt] = useState<{ pending: string | null } | null>(null)
 
   useEffect(() => localStorage.setItem('bite-saved', JSON.stringify(saved)), [saved])
   useEffect(() => localStorage.setItem('bite-plans', JSON.stringify(plans)), [plans])
@@ -343,9 +355,27 @@ export default function App() {
     setSchedulePlace(null)
   }
 
-  async function sendMessage(text = chatInput) {
+  function openAssistant() {
+    setAssistantVisible(true)
+    void ai.refresh().then((state) => {
+      if (state !== 'ready') setKeyPrompt({ pending: null })
+    })
+  }
+
+  function closeKeyPrompt(nowReady: boolean) {
+    if (nowReady) ai.markReady()
+    const pending = keyPrompt?.pending
+    setKeyPrompt(null)
+    if (pending) void sendMessage(pending, true)
+  }
+
+  async function sendMessage(text = chatInput, skipKeyCheck = false) {
     const trimmed = text.trim()
     if (!trimmed || assistantBusy) return
+    if (!skipKeyCheck && (await ai.refresh()) !== 'ready') {
+      setKeyPrompt({ pending: trimmed })
+      return
+    }
     setChatInput('')
     setShowChatResults(false)
     setAssistantError('')
@@ -440,7 +470,7 @@ export default function App() {
                 <h1>What are you craving?</h1>
               </div>
               {!assistantVisible && (
-                <button type="button" className="customization-button" data-testid="open-assistant" onClick={() => setAssistantVisible(true)}>
+                <button type="button" className="customization-button" data-testid="open-assistant" onClick={openAssistant}>
                   <span>
                     <Icon name="sliders" />
                     <span>
@@ -453,16 +483,29 @@ export default function App() {
               )}
               {assistantVisible && (
                 <section className="ai-assistant" data-testid="assistant">
-                  <button type="button" className="ai-heading" onClick={() => setAssistantVisible(true)}>
+                  <button type="button" className="ai-heading" onClick={openAssistant}>
                     <span className="ai-mark">
                       <Icon name="spark" />
                     </span>
                     <span>
                       <strong>Your food assistant</strong>
-                      <small>On-device matches, unless an assistant URL is configured</small>
+                      <small data-testid="ai-subtitle">{AI_SUBTITLE[ai.state]}</small>
                     </span>
                     <Icon name="arrow" />
                   </button>
+                  {(ai.state === 'missing-key' || ai.state === 'server-offline') && (
+                    <div className="ai-setup-banner" role="status" data-testid="ai-setup-banner">
+                      <p>
+                        <strong>{ai.state === 'missing-key' ? 'AI is off: no API key yet.' : "AI is off: the app server isn't running."}</strong>{' '}
+                        This is a setup step, not a bug. Until it's fixed, answers use basic keyword matching.
+                      </p>
+                      {ai.state === 'missing-key' && (
+                        <button type="button" onClick={() => setKeyPrompt({ pending: null })}>
+                          Add API key
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {!messages.length && momentPick && (
                     <div className="context-intro">
                       <div className="context-weather">
@@ -1109,6 +1152,8 @@ export default function App() {
             </section>
           </div>
         )}
+
+        {keyPrompt && <AiKeyPrompt state={ai.state} onReady={() => closeKeyPrompt(true)} onSkip={() => closeKeyPrompt(false)} />}
 
         {confirmation && (
           <div className="confirmation-backdrop">

@@ -1006,7 +1006,21 @@ fieldset { border: 0; padding: 0; margin: 0 0 17px; }
 .saved-row { grid-template-columns: 84px 1fr 44px; }
 .saved-row button { width: 44px; height: 44px; display: grid; place-items: center; }
 .search button { min-width: 44px; height: 44px; }
-.chip { min-width: 44px; }
+/* Chips keep their natural width. Without flex-shrink: 0 the explicit min-width let
+   the row squeeze every chip to 44px, so the labels spilled over their bubbles. */
+.chip { min-width: 44px; flex: 0 0 auto; }
+/* Chip rows scroll sideways on one line (no clutter). Snap to chips, and fade the
+   right edge so it is obvious there are more. */
+.filters {
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 2px;
+  padding-right: 28px; /* lets the last chip scroll fully clear of the fade */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.filters .chip { scroll-snap-align: start; }
 .card-actions button { min-height: 44px; }
 .search input, .chat-input input, .field input, .date-picker input, .edit-panel input, .budget-input input { min-height: 44px; }
 

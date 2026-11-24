@@ -346,6 +346,10 @@ export default function App() {
     return matches
   }, [view, query, area, cuisine, budget, assistantPreference, assistantMaxTravel, userLocation])
 
+  // Profile area picker: the current area (even a custom one typed in Filters) must always be a selectable option.
+  const profileArea = isCitywide(area) ? 'Seattle, WA' : (NEIGHBORHOODS.find((name) => name.toLowerCase() === area.trim().toLowerCase()) ?? area)
+  const profileAreaIsCustom = !isCitywide(area) && !(NEIGHBORHOODS as readonly string[]).includes(profileArea)
+
   const grouped = useMemo(() => {
     if (!isCitywide(area) || query.trim() || userLocation) return [{ name: '', places: filtered }]
     return NEIGHBORHOODS.map((name) => ({
@@ -1160,29 +1164,65 @@ export default function App() {
               <h1>{DEMO_USER.name}</h1>
               <p>Demo profile. There is no sign-in in this version.</p>
               <div className="preference">
-                <span>Current area</span>
-                <strong>{area}</strong>
+                <label htmlFor="profile-area">Current area</label>
+                <div className="control">
+                  <Icon name="pin" />
+                  <select id="profile-area" value={profileArea} onChange={(event) => setArea(event.target.value)} data-testid="profile-area">
+                    <option value="Seattle, WA">All of Seattle</option>
+                    {NEIGHBORHOODS.map((name) => (
+                      <option value={name} key={name}>
+                        {name}
+                      </option>
+                    ))}
+                    {profileAreaIsCustom && <option value={profileArea}>{profileArea}</option>}
+                  </select>
+                </div>
               </div>
               <div className="preference">
-                <span>Maximum budget</span>
-                <strong>{budget ? `$${budget} per person` : 'No limit'}</strong>
+                <label htmlFor="profile-budget">Maximum budget</label>
+                <div className="control">
+                  <strong aria-hidden="true">$</strong>
+                  <input
+                    id="profile-budget"
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    value={budget}
+                    onChange={(event) => setBudget(event.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+                    placeholder="No limit"
+                    data-testid="profile-budget"
+                  />
+                  {budget && (
+                    <button type="button" className="control-clear" onClick={() => setBudget('')} aria-label="Remove budget limit" data-testid="profile-budget-clear">
+                      <Icon name="close" size={16} />
+                    </button>
+                  )}
+                </div>
+                <small>Per person. Leave empty for no limit.</small>
               </div>
-              <div className="preference">
-                <span>Travel preference</span>
-                <strong>{MODES.find((item) => item.key === mode)?.label}</strong>
+              <div className="preference" role="group" aria-labelledby="profile-travel-label">
+                <span id="profile-travel-label">Travel preference</span>
+                <div className="option-grid">
+                  {MODES.map((item) => (
+                    <button type="button" key={item.key} className={mode === item.key ? 'active' : ''} onClick={() => setMode(item.key)} aria-pressed={mode === item.key} data-testid={`profile-mode-${item.key}`}>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="preference">
+              <button type="button" className="preference link" onClick={() => setTab('heart')} data-testid="profile-saved-link">
                 <span>Saved places</span>
                 <strong>
                   {saved.length} place{saved.length === 1 ? '' : 's'}
                 </strong>
-              </div>
-              <div className="preference">
+              </button>
+              <button type="button" className="preference link" onClick={() => setTab('calendar')} data-testid="profile-plans-link">
                 <span>Dining plans</span>
                 <strong>
                   {plans.length} plan{plans.length === 1 ? '' : 's'}
                 </strong>
-              </div>
+              </button>
+              <p className="profile-note">Area, budget and travel changes apply to Discover.</p>
             </div>
           )}
         </div>

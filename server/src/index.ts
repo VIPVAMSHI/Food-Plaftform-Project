@@ -65,5 +65,11 @@ async function main() {
 
 main().catch((error) => {
   console.error('Server failed to start:', error)
+  if (error instanceof Error && /not a database|database disk image|SQLITE|unable to open database/i.test(error.message)) {
+    console.error(
+      `\nThe database file (DB_PATH=${process.env.DB_PATH ?? 'data/bite.db'}) cannot be opened.\n` +
+        'Move it aside (it is recreated on start, without saved plans or favorites) or point DB_PATH at another file.\n',
+    )
+  }
   process.exit(1)
 })

@@ -134,6 +134,32 @@ test.describe('failure injection: the audience never sees an error', () => {
     expect((await res.json()).place.neighborhood).toMatch(/Ballard|Fremont/)
   })
 
+  test('a render crash shows the friendly reload card, not a blank page', async ({ page }) => {
+    await page.addInitScript(() => {
+      Intl.DateTimeFormat.prototype.formatToParts = () => {
+        throw new Error('injected render failure')
+      }
+    })
+    await page.goto('/')
+    const card = page.getByTestId('error-boundary')
+    await expect(card).toBeVisible()
+    await expect(card).toContainText("Let's reload that.")
+    await expect(card.getByRole('button', { name: 'Reload the app' })).toBeVisible()
+  })
+
+  test('markup in a chat message is shown as text, never run', async ({ page }) => {
+    await openApp(page)
+    let alerted = false
+    page.on('dialog', async (dialog) => {
+      alerted = true
+      await dialog.dismiss()
+    })
+    await ask(page, '<img src=x onerror="alert(1)"> pizza <script>alert(2)</script>')
+    await expect(page.getByTestId('chat-log').getByTestId('user-message')).toContainText('<img src=x onerror="alert(1)">')
+    expect(await page.getByTestId('chat-log').locator('img, script').count()).toBe(0)
+    expect(alerted).toBe(false)
+  })
+
   test('deep links and unknown paths load the app; unknown API paths return JSON', async ({ page, request }) => {
     await openApp(page, '/some/old/link')
     const api = await request.get('/api/does-not-exist')

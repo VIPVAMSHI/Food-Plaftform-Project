@@ -48,6 +48,19 @@ describe('places', () => {
     expect(wildcard.count).toBe(0)
   })
 
+  it('treats SQL in filters as plain text', async () => {
+    const app = await start()
+    for (const q of ["' OR 1=1 --", "x'; DROP TABLE plans; --", '" OR ""="']) {
+      const res = await app.inject(`/api/places?q=${encodeURIComponent(q)}`)
+      expect(res.statusCode).toBe(200)
+      expect(res.json().count).toBe(0)
+    }
+    const hood = await app.inject(`/api/places?neighborhood=${encodeURIComponent("Ballard' OR '1'='1")}`)
+    expect(hood.json().count).toBe(0)
+    expect((await app.inject('/api/health')).json().places).toBe(68)
+    expect((await app.inject('/api/plans')).statusCode).toBe(200)
+  })
+
   it('returns one place, 404 for an unknown id, 400 for a bad filter', async () => {
     const app = await start()
     expect((await app.inject('/api/places/wolf')).json().place.name).toBe('How to Cook a Wolf')

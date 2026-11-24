@@ -3,7 +3,8 @@
 Read this and DECISIONS.md first after a context reset.
 
 ## Current
-- Phase: 5 (clean room + final report). Soak (10×) running → then clean-room run, FINAL_REPORT.md, tag `demo-ready-v1`.
+- All phases done. Tagged `demo-ready-v1`. Remaining items need the user: API key, GitHub/Render login (see FINAL_REPORT.md §1 and §7).
+- Phase 5: soak 10/10; clean room (fresh clone, `npm ci`, build, lint, typecheck, 94 tests, eval 50/50, e2e 133/133, start + preflight YELLOW only for the key); FINAL_REPORT.md.
 
 ## Done
 - Phase 1 audit: AUDIT.md. Commit 90eebff.

@@ -36,3 +36,5 @@ One or two lines each: what, and why. Newest last.
 32. **Soak = 10 consecutive runs of unit + API tests and the full Chromium e2e suite** (`npm run test:soak`), stopping at the first failure.
 33. **Chaos burst uses 100 concurrent connections.** 300 simultaneous connects hit macOS's pending-connection cap (`kern.ipc.somaxconn` = 128) and 1 of 300 was reset by the kernel; that measured the laptop, not the server. Linux hosts default to 4096.
 34. **`postinstall` runs `npm ci` in `server/`,** so a clean install uses the exact server lockfile.
+35. **FINAL_REPORT.md sections** (the brief's exact headings were lost in a context reset): status, what changed, test evidence, not run, deploy, risks, manual checklist, refactor ideas.
+36. **Not pushed.** `git push -u origin demo-final` needs GitHub credentials that this machine doesn't have. The branch and tag are local; DEPLOY.md step 1 is the push.

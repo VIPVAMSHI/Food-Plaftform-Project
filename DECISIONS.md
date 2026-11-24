@@ -37,4 +37,5 @@ One or two lines each: what, and why. Newest last.
 33. **Chaos burst uses 100 concurrent connections.** 300 simultaneous connects hit macOS's pending-connection cap (`kern.ipc.somaxconn` = 128) and 1 of 300 was reset by the kernel; that measured the laptop, not the server. Linux hosts default to 4096.
 34. **`postinstall` runs `npm ci` in `server/`,** so a clean install uses the exact server lockfile.
 35. **FINAL_REPORT.md sections** (the brief's exact headings were lost in a context reset): status, what changed, test evidence, not run, deploy, risks, manual checklist, refactor ideas.
+37. **Shutdown drops leftover connections after 1.5 s.** A browser holding a half-finished request made `SIGTERM` wait the full 10 s and exit 1 ("Shutdown took too long"), slowing a restart on stage. Requests get 1.5 s to finish, then `closeAllConnections()`; exit is 0. Found by reading two old server logs, reproduced by a new chaos check.
 36. **Not pushed.** `git push -u origin demo-final` needs GitHub credentials that this machine doesn't have. The branch and tag are local; DEPLOY.md step 1 is the push.

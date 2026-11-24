@@ -46,7 +46,7 @@ All of these were run on commit `f90d63d`. The clean-room rows are from a fresh 
 | T5+T6 e2e + axe + keyboard + touch | `npm run test:e2e` (Chrome 1440 and 1920, Safari/WebKit 1440, mobile 390) | `133 passed (2.2m)`, 0 flaky |
 | Start + preflight | `npm start`, then `npm run preflight -- http://localhost:3200` | `YELLOW: 17 green, 1 yellow, 0 red in 0.1s` (the yellow is the missing key) |
 | T7 Lighthouse | `npm run test:lighthouse` | mobile `performance 100, accessibility 100, best-practices 100, seo 100`; desktop `99, 100, 100, 100` |
-| T8 chaos | `npm run test:chaos` | `9/9 chaos checks passed` (kill -9 mid-writes: `72 acknowledged before the kill, 72 stored, integrity ok`) |
+| T8 chaos | `npm run test:chaos` | `10/10 chaos checks passed` (kill -9 mid-writes: `72 acknowledged before the kill, 72 stored, integrity ok`; SIGTERM with a stalled request: `exit 0 in 1515 ms`) |
 | T9 security | `npm run test:security` | `9/9 security checks passed` (npm audit: 0 vulnerabilities for root and server) |
 | T10 soak | `npm run test:soak` | 10 of 10 consecutive runs, each `94 passed` plus `33 passed`; ends `soak exit=0` |
 | Preflight RED path | preflight against a dead port | prints RED and exits 1 |

@@ -17,7 +17,7 @@ Read this and DECISIONS.md first after a context reset.
   - Playwright 125/125 + crash-card and XSS tests (Chrome 1440/1920, mobile 390, Safari)
   - axe 0 critical/serious on every tab and dialog; keyboard-only flow; 44 px targets on mobile
   - Lighthouse mobile 100/100/100/100, desktop 99/100/100/100
-  - chaos 9/9; security 9/9
+  - chaos 10/10; security 9/9
 - Phase 4 deploy prep: render.yaml, DEPLOY.md, .node-version. Not deployed: no Render credentials (blocker).
 
 ## Open / blocked

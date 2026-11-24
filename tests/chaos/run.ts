@@ -4,6 +4,7 @@
  * Writes artifacts/chaos/report.md. Exits 1 if any check fails.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -54,6 +55,36 @@ await step('SIGTERM shuts down cleanly with exit code 0', async () => {
   assert(code === 0, `exit code ${code}`)
   assert(/SIGTERM received/.test(server.logs()), 'no shutdown log line')
   return `exit 0, in-flight request → ${status}`
+})
+
+await step('SIGTERM with an open keep-alive connection and a stalled request still exits cleanly and fast', async () => {
+  const { env } = dataEnv()
+  const server = await startServer(env)
+  const { port, hostname } = new URL(server.url)
+  // Raw socket that finishes one request and then stays open, like a browser tab on the page.
+  const socket = net.connect(Number(port), hostname)
+  await new Promise<void>((resolve, reject) => {
+    socket.once('error', reject)
+    socket.once('data', () => resolve())
+    socket.write(`GET /api/health HTTP/1.1\r\nHost: ${hostname}\r\nConnection: keep-alive\r\n\r\n`)
+  })
+  // A second socket that started a request and never finished it (a stalled upload or a flaky network).
+  const stalled = net.connect(Number(port), hostname)
+  await new Promise<void>((resolve, reject) => {
+    stalled.once('error', reject)
+    stalled.once('connect', () => {
+      stalled.write(`POST /api/plans HTTP/1.1\r\nHost: ${hostname}\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n{"placeId":`)
+      setTimeout(resolve, 200)
+    })
+  })
+  const started = Date.now()
+  const code = await server.stop('SIGTERM')
+  const took = Date.now() - started
+  socket.destroy()
+  stalled.destroy()
+  assert(code === 0, `exit code ${code}: ${server.logs().split('\n').filter((l) => /too long/.test(l)).join('')}`)
+  assert(took < 5000, `took ${took} ms to stop`)
+  return `exit 0 in ${took} ms with the connection still open`
 })
 
 await step('Plans and favorites survive a restart', async () => {

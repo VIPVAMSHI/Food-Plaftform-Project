@@ -3,6 +3,7 @@ import { PREWARM_QUERIES } from './assistant/demoQueries.js'
 import { EnvError, loadEnv } from './env.js'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
+const CONNECTION_GRACE_MS = 1_500
 
 async function main() {
   let env
@@ -51,6 +52,10 @@ async function main() {
       process.exit(1)
     }, SHUTDOWN_TIMEOUT_MS)
     force.unref()
+    // Open browser tabs hold keep-alive connections that would make close() wait for the full
+    // timeout. Give real requests a moment to finish, then drop whatever connections remain.
+    const dropIdle = setTimeout(() => app.server.closeAllConnections(), CONNECTION_GRACE_MS)
+    dropIdle.unref()
     try {
       await app.close()
       process.exit(0)

@@ -13,3 +13,17 @@ One or two lines each: what, and why. Newest last.
 9. **Duplicates:** one plan per (user, place, date). A second one returns 409 and the UI says "already planned for that day". The old behaviour (silently overwriting the other date) was data loss.
 10. **Assistant rate limit degrades instead of refusing.** Over the per-IP LLM budget, answers come from the cache or local matcher (`source` says which) instead of a 429, so the audience never sees a refusal. A hard ceiling (429 with a friendly message) protects the server from floods; the front end falls back locally on it.
 11. **Places are upserted on every boot** (insert or update by id, never delete). This is idempotent, keeps foreign keys from plans intact, and picks up dataset edits.
+12. **Coordinates from OpenStreetMap Nominatim** for all 68 addresses (6 needed a simplified address; all checked against Seattle bounds and their neighborhood). Used only for "sort by my location"; travel estimates still come from the listed miles.
+13. **A time limit means door to table: travel + estimated wait.** "I have 30 minutes" is about when you eat, not when you arrive. The chip reads "≤ N min total" so the meaning is visible.
+14. **If the model returns no usable picks but code found matches, answer locally.** An empty answer would look like a bug on stage. `meta.llmError` records it.
+15. **The 6 s LLM deadline covers the retry.** One retry on 429/5xx/network only if ≥ 750 ms remain, so the worst case is ~6 s, never 12 s.
+16. **A 401/403 from the provider disables the key in memory until restart** (`markRejected`). Every later request falls back instantly instead of waiting on a doomed call. The env file is never edited by an error.
+17. **Reply text is composed in code (English); the model only picks ids and writes the one-line reasons.** Keeps counts, names, and limits in the reply exactly right. Reasons follow the request language.
+18. **Fonts self-hosted via @fontsource** (DM Sans, Playfair Display). No Google Fonts request, so venue wifi or a strict CSP cannot change the look; system fonts are the fallback.
+19. **Colors darkened for contrast:** coral text #f06a4f → #b9432a (3.0 → 5.4:1 on white), muted #77837d → #5f6b66, nav grey → #5f6b66. Minimum font size 11 px. Same palette, readable on a projector.
+20. **Projector scaling:** at ≥ 1600×1000 the phone frame is zoomed 1.2× (1.5× at ≥ 2400×1300) instead of shrinking text.
+21. **Labels:** "Customization" → "Ask the food assistant"; "YOUR LOCATION" → "YOUR AREA" (it is a filter, not GPS); the date chip reads "Plan date". The demo profile name stays "Alex Morgan" (one constant, `DEMO_USER`), with "Demo profile. There is no sign-in in this version."
+22. **Local cache entries are rebuilt on every boot; only live-model entries persist.** Local answers are cheap and deterministic, so a code or data change can never leave a stale cached answer on stage.
+23. **Photos recompressed to ≤ 720 px wide** (2.9 MB → 1.2 MB total, largest 89 KB). They render at ≤ 400 CSS px.
+24. **Demo queries chosen from the eval run** (`server/src/assistant/demoQueries.ts`): each returns three picks locally. "brunch in Fremont" (0 picks) and "seafood in Pike Place" (1 pick) were dropped. "sushi under $5 in Ballard" stays on purpose to show the honest "nothing fits" answer.
+25. **Plain `.mjs` for preflight and the dist secret scan,** so they run on any Node 22 with no build or TypeScript loader, including from a laptop backstage against the deployed URL.

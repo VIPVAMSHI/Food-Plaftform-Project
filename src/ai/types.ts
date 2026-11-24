@@ -1,1 +1,1 @@
-export type { AssistantPlace, AssistantRequest, AssistantResponse, MealMoment, TravelMode } from '../../shared/types'
+export type { AssistantPlace, AssistantRequest, AssistantResponse, AssistantSource, MealMoment, TravelMode } from '../../shared/types'

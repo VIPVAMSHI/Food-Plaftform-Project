@@ -9,24 +9,44 @@ import { api } from '../api/client'
  */
 export type AiSetupState = 'checking' | 'ready' | 'missing-key' | 'server-offline'
 
+const DEBUG_QUERY = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1'
+
 /** Tracks whether the live AI assistant is set up. `refresh` re-asks the server, so a key added by anyone is picked up. */
 export function useAiStatus() {
   const [state, setState] = useState<AiSetupState>('checking')
+  const [keyPromptEnabled, setKeyPromptEnabled] = useState(false)
+  const [demoDebug, setDemoDebug] = useState(DEBUG_QUERY)
 
-  const refresh = useCallback(async (): Promise<AiSetupState> => {
+  /** Re-asks the server. `promptable` is true when the setup prompt should be shown now. */
+  const refresh = useCallback(async (): Promise<{ state: AiSetupState; promptable: boolean }> => {
     let next: AiSetupState
+    let promptEnabled: boolean
     try {
-      next = (await api.getAiStatus()).configured ? 'ready' : 'missing-key'
+      const status = await api.getAiStatus()
+      next = status.configured ? 'ready' : 'missing-key'
+      promptEnabled = status.keyPromptEnabled
+      setDemoDebug(DEBUG_QUERY || status.demoDebug)
     } catch {
       next = 'server-offline'
+      // Without the server we cannot know its settings. Only the dev build (npm run dev) shows setup messages then.
+      promptEnabled = import.meta.env.DEV
     }
+    setKeyPromptEnabled(promptEnabled)
     setState(next)
-    return next
+    return { state: next, promptable: promptEnabled && next !== 'ready' }
   }, [])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  return { state, refresh, markReady: useCallback(() => setState('ready'), []) }
+  return {
+    state,
+    refresh,
+    /** Setup messages ("AI is off…") are for the developer, never for a demo audience. */
+    showSetup: keyPromptEnabled && (state === 'missing-key' || state === 'server-offline'),
+    keyPromptEnabled,
+    demoDebug,
+    markReady: useCallback(() => setState('ready'), []),
+  }
 }

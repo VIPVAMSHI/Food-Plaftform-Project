@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { ApiError, api } from '../api/client'
 import { Icon } from '../icons'
+import { useDialog } from '../useDialog'
 import type { AiSetupState } from './useAiStatus'
 
 const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/
@@ -37,19 +38,8 @@ export function AiKeyPrompt({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const onSkipRef = useRef(onSkip)
-  onSkipRef.current = onSkip
+  const dialogRef = useDialog<HTMLElement>(onSkip)
   const offline = state === 'server-offline'
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onSkipRef.current()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -92,7 +82,7 @@ export function AiKeyPrompt({
 
   return (
     <div className="confirmation-backdrop">
-      <section className="schedule-card ai-key-card" role="dialog" aria-modal="true" aria-labelledby="ai-key-title" data-testid="ai-key-prompt">
+      <section ref={dialogRef} tabIndex={-1} className="schedule-card ai-key-card" role="dialog" aria-modal="true" aria-labelledby="ai-key-title" data-testid="ai-key-prompt">
         <div className="sheet-title">
           <div>
             <p className="eyebrow">SETUP NEEDED · NOT AN ERROR</p>
@@ -127,7 +117,7 @@ export function AiKeyPrompt({
                   <div>
                     <Icon name="spark" />
                     <input
-                      ref={inputRef}
+                      data-autofocus
                       data-testid="ai-key-input"
                       type="password"
                       autoComplete="off"

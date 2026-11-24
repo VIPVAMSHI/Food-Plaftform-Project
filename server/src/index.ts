@@ -1,4 +1,5 @@
 import { buildApp } from './app.js'
+import { PREWARM_QUERIES } from './assistant/demoQueries.js'
 import { EnvError, loadEnv } from './env.js'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
@@ -21,7 +22,24 @@ async function main() {
     app.log.warn('LLM_API_KEY is not set. The assistant will answer from the demo cache and the local matcher.')
   }
 
-  await app.listen({ port: env.PORT, host: env.HOST })
+  try {
+    await app.listen({ port: env.PORT, host: env.HOST })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      console.error(
+        `\nPort ${env.PORT} is already in use. Another copy of the server is probably running.\n` +
+          `Stop it (macOS/Linux: lsof -ti tcp:${env.PORT} | xargs kill) or start on another port: PORT=3002 npm start\n`,
+      )
+      process.exit(1)
+    }
+    throw error
+  }
+
+  // Fill the demo cache in the background; the server is already answering.
+  void app.assistant
+    .prewarm(PREWARM_QUERIES)
+    .then((counts) => app.log.info({ prewarm: counts }, 'demo cache ready'))
+    .catch((error: unknown) => app.log.warn({ err: error }, 'demo cache prewarm failed; answers fall back to the local matcher'))
 
   let shuttingDown = false
   const shutdown = async (signal: string) => {

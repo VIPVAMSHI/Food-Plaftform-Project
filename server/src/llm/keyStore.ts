@@ -6,6 +6,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
  */
 export class LlmKeyStore {
   #key: string | undefined
+  #rejected = false
 
   constructor(
     initialKey: string | undefined,
@@ -15,17 +16,19 @@ export class LlmKeyStore {
     this.#key = initialKey
   }
 
+  /** A key is present and the provider has not rejected it since startup. */
   get configured(): boolean {
-    return Boolean(this.#key)
+    return Boolean(this.#key) && !this.#rejected
   }
 
   get key(): string | undefined {
-    return this.#key
+    return this.#rejected ? undefined : this.#key
   }
 
   /** Stores the key in memory and in the env file. Returns whether the file write succeeded. */
   save(key: string): { persisted: boolean } {
     this.#key = key
+    this.#rejected = false
     if (!this.envFilePath) return { persisted: false }
     try {
       writeEnvValue(this.envFilePath, 'LLM_API_KEY', key)
@@ -35,15 +38,12 @@ export class LlmKeyStore {
     }
   }
 
-  /** Forgets a key the provider rejected, so the app asks for a new one. */
-  clear(): void {
-    this.#key = undefined
-    if (!this.envFilePath) return
-    try {
-      writeEnvValue(this.envFilePath, 'LLM_API_KEY', '')
-    } catch {
-      // The in-memory key is already cleared; a stale file value is rejected again on next use.
-    }
+  /**
+   * The provider answered 401/403. Stop using the key until restart or a new key is saved,
+   * so every request falls back instantly instead of waiting on a doomed call. The env file is left alone.
+   */
+  markRejected(): void {
+    this.#rejected = true
   }
 }
 

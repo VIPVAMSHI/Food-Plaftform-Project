@@ -10,6 +10,8 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'RATE_LIMITED'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'PAST_DATE'
   | 'AI_NOT_CONFIGURED'
   | 'AI_UNAVAILABLE'
   | 'AI_TIMEOUT'
@@ -47,6 +49,15 @@ export function errorHandler(error: FastifyError | Error, request: FastifyReques
     return sendError(reply, request, 'BAD_REQUEST', 400, `Invalid ${where}: ${first?.message ?? 'bad input'}.`)
   }
   const statusCode = (error as FastifyError).statusCode
+  if (statusCode === 413) {
+    return sendError(reply, request, 'PAYLOAD_TOO_LARGE', 413, 'Request body is too large.')
+  }
+  if (statusCode === 415) {
+    return sendError(reply, request, 'BAD_REQUEST', 415, 'Send JSON with Content-Type: application/json.')
+  }
+  if ((error as FastifyError).code === 'FST_ERR_CTP_INVALID_JSON' || (error instanceof SyntaxError && statusCode === 400)) {
+    return sendError(reply, request, 'BAD_REQUEST', 400, 'Request body is not valid JSON.')
+  }
   if (statusCode && statusCode >= 400 && statusCode < 500) {
     return sendError(reply, request, 'BAD_REQUEST', statusCode, error.message)
   }

@@ -1,39 +1,40 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import type { AiStatus, SaveAiKeyResponse } from '../../../shared/types.js'
+import type { LlmProvider } from '../assistant/provider.js'
 import type { Env } from '../env.js'
-import { AppError } from '../errors.js'
+import { AppError, notFound } from '../errors.js'
 import { ANTHROPIC_KEY_PATTERN, type KeyCheck } from '../llm/anthropic.js'
 import type { LlmKeyStore } from '../llm/keyStore.js'
+import { RateLimiter } from '../rateLimit.js'
 
 const saveKeyBody = z.object({ apiKey: z.string().trim().min(1, 'is empty').max(400, 'is too long') })
-
-const ATTEMPT_WINDOW_MS = 10 * 60 * 1000
-const MAX_ATTEMPTS = 10
 
 export type AiRoutesOptions = {
   env: Env
   keyStore: LlmKeyStore
+  provider: LlmProvider
   verifyKey: (apiKey: string) => Promise<KeyCheck>
 }
 
-export const aiRoutes: FastifyPluginAsync<AiRoutesOptions> = async (app, { env, keyStore, verifyKey }) => {
-  const attempts = new Map<string, number[]>()
+export const aiRoutes: FastifyPluginAsync<AiRoutesOptions> = async (app, { env, keyStore, provider, verifyKey }) => {
+  const attempts = new RateLimiter(10, 10 * 60 * 1000)
 
   app.get('/ai/status', async (): Promise<AiStatus> => ({
-    configured: keyStore.configured,
+    configured: provider.ready,
     provider: env.LLM_PROVIDER,
-    model: env.LLM_MODEL,
+    model: env.LLM_MODEL ?? null,
+    keyPromptEnabled: env.AI_KEY_PROMPT,
+    demoDebug: env.DEMO_DEBUG,
   }))
 
-  // TODO(auth): once real accounts exist, restrict this to an admin.
+  // Development convenience only. In production the key comes from the host's environment settings.
+  // TODO(auth): if this is ever enabled on a public URL, restrict it to an admin.
   app.post('/ai/key', async (request): Promise<SaveAiKeyResponse> => {
-    const now = Date.now()
-    const recent = (attempts.get(request.ip) ?? []).filter((time) => now - time < ATTEMPT_WINDOW_MS)
-    if (recent.length >= MAX_ATTEMPTS) {
+    if (!env.AI_KEY_PROMPT) throw notFound('This endpoint')
+    if (!attempts.allow(request.ip)) {
       throw new AppError('RATE_LIMITED', 429, 'Too many key attempts. Wait a few minutes and try again.')
     }
-    attempts.set(request.ip, [...recent, now])
 
     // Once a key is set, nobody can replace it from the browser. Change it in server/.env instead.
     if (keyStore.configured) {

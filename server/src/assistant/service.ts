@@ -3,7 +3,7 @@ import { mealMomentFor, seattleDateTime, seattleHour } from '../../../shared/dat
 import { toAssistantPlace } from '../../../shared/places.js'
 import type { AssistantPlace, AssistantResponse, AssistantSource, MealMoment, TravelMode } from '../../../shared/types.js'
 import { PLACES } from '../places.js'
-import type { RateLimiter } from '../rateLimit.js'
+import type { Client, VisitorLimiter } from '../rateLimit.js'
 import type { AssistantCache } from './cache.js'
 import { MAX_CANDIDATES_FOR_MODEL, MAX_OUTPUT_TOKENS, SYSTEM_PROMPT, buildUserPrompt } from './prompt.js'
 import { LlmError, type LlmProvider, type LlmResult } from './provider.js'
@@ -31,7 +31,7 @@ type Logger = { info: (obj: object, msg: string) => void; warn: (obj: object, ms
 export type AssistantServiceDeps = {
   provider: LlmProvider
   cache: AssistantCache
-  llmLimiter: RateLimiter
+  llmLimiter: VisitorLimiter
   neighborhoods: string[]
   log: Logger
   timeoutMs?: number
@@ -54,7 +54,7 @@ export class AssistantService {
     return PLACES.map((place) => toAssistantPlace(place, mode))
   }
 
-  async answer(input: AssistantInput, clientKey: string, options: { skipCache?: boolean } = {}): Promise<{ response: AssistantResponse; meta: AnswerMeta }> {
+  async answer(input: AssistantInput, client: Client, options: { skipCache?: boolean } = {}): Promise<{ response: AssistantResponse; meta: AnswerMeta }> {
     const started = performance.now()
     const meta: AnswerMeta = { source: 'local', latencyMs: 0, inputTokens: 0, outputTokens: 0, candidates: 0, llmAttempts: 0 }
     const done = (response: AssistantResponse) => {
@@ -77,7 +77,7 @@ export class AssistantService {
 
     const ranked = rankLocal(prepared.candidates, prepared.constraints)
     if (!this.deps.provider.ready) meta.llmSkipped = 'not_configured'
-    else if (!this.deps.llmLimiter.allow(clientKey)) meta.llmSkipped = 'rate_limited'
+    else if (!this.deps.llmLimiter.allow(client)) meta.llmSkipped = 'rate_limited'
     else {
       try {
         const result = await this.#callWithDeadline(
@@ -161,7 +161,7 @@ export class AssistantService {
       const places = this.#places(mode)
       const prepared = prepare(input, places, this.deps.neighborhoods)
       if (prepared.kind === 'answer') continue
-      const { response } = await this.answer(input, 'prewarm', { skipCache: true })
+      const { response } = await this.answer(input, { ip: 'prewarm', visitor: null }, { skipCache: true })
       if (response.source === 'llm') counts.llm++
       else if (response.source === 'local') {
         this.deps.cache.set(key, response, 'local')

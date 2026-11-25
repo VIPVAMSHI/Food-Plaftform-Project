@@ -4,7 +4,7 @@ import { isValidDateString, isValidTimeString, seattleToday } from '../../../sha
 import { PlanLimitReached, UniqueViolation, type Db } from '../db/index.js'
 import { AppError, notFound } from '../errors.js'
 import { getPlace } from '../places.js'
-import type { RateLimiter } from '../rateLimit.js'
+import type { VisitorLimiter } from '../rateLimit.js'
 import { currentUserId } from '../user.js'
 
 /** One visitor cannot fill the database: plenty for a real person, small for a script. */
@@ -29,13 +29,10 @@ const DUPLICATE = 'That restaurant is already planned for that day.'
 
 export type WriteGuard = (request: FastifyRequest, userId: string) => void
 
-/**
- * Writes per visitor per minute, plus a looser per-IP ceiling: a room on one Wi-Fi shares an IP, while a script
- * inventing new visitor ids is still bounded. In memory, so per server instance: approximate on Vercel.
- */
-export function writeGuard(perVisitor: RateLimiter, perIp: RateLimiter): WriteGuard {
+/** Plan and favorite changes per visitor, with a per-IP ceiling. In memory, so per server instance: approximate on Vercel. */
+export function writeGuard(limiter: VisitorLimiter): WriteGuard {
   return (request, userId) => {
-    if (!perVisitor.allow(`${request.ip}|${userId}`) || !perIp.allow(request.ip)) {
+    if (!limiter.allow({ ip: request.ip, visitor: userId })) {
       throw new AppError('RATE_LIMITED', 429, 'Too many changes at once. Wait a moment and try again.')
     }
   }

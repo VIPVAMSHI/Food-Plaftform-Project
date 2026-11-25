@@ -10,6 +10,7 @@
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, resolve } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 
 const OUTPUT = resolve(process.argv[2] || '.vercel/output')
@@ -42,6 +43,24 @@ function substitute(dest, match) {
   return dest.replace(/\$(\d+)/g, (_, n) => match[Number(n)] ?? '')
 }
 
+/**
+ * With `shouldAddHelpers` (the default), @vercel/node reads the whole body of any request with a Content-Type before
+ * calling the function, then replays it: `data`/`end` listeners and `read()` go to a PassThrough holding the bytes.
+ * Same steps as `readBody`/`restoreBody` in @vercel/node 32, so the app sees the stream the way it will on Vercel.
+ */
+async function addVercelBodyHelper(req) {
+  if (req.headers['content-type'] === undefined) return
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  const replay = new PassThrough()
+  const on = replay.on.bind(replay)
+  const originalOn = req.on.bind(req)
+  req.read = replay.read.bind(replay)
+  req.on = req.addListener = (name, cb) => (name === 'data' || name === 'end' ? on(name, cb) : originalOn(name, cb))
+  replay.write(Buffer.concat(chunks))
+  replay.end()
+}
+
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://local')
   const path = decodeURIComponent(url.pathname)
@@ -55,6 +74,7 @@ createServer(async (req, res) => {
       req.url = `/api${query ? `?${query}` : ''}`
       req.headers['x-forwarded-for'] = req.socket.remoteAddress ?? '127.0.0.1'
       req.headers['x-forwarded-proto'] = 'https'
+      if (vc.shouldAddHelpers !== false) await addVercelBodyHelper(req)
       return handler(req, res)
     }
     res.setHeader('Content-Type', TYPES[extname(target.file)] ?? 'application/octet-stream')

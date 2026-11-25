@@ -15,7 +15,7 @@ import type { Env } from './env.js'
 import { errorHandler, sendError } from './errors.js'
 import { googleProvider, verifyGoogleKey, type KeyCheck } from './llm/google.js'
 import { LlmKeyStore } from './llm/keyStore.js'
-import { RateLimiter } from './rateLimit.js'
+import { VisitorLimiter } from './rateLimit.js'
 import { aiRoutes } from './routes/ai.js'
 import { assistantRoutes } from './routes/assistant.js'
 import { favoriteRoutes } from './routes/favorites.js'
@@ -62,9 +62,9 @@ export type BuildOptions = {
   /** Clock for "today" checks on plans. */
   now?: () => Date
   llmTimeoutMs?: number
-  /** LLM calls per client per minute before answers come from the cache or local matcher. */
+  /** LLM calls per browser per minute (four times that per IP) before answers come from the cache or local matcher. */
   llmPerMinute?: number
-  /** Assistant requests per client per minute before a friendly 429. */
+  /** Assistant requests per browser per minute (ten times that per IP) before a friendly 429. */
   assistantPerMinute?: number
   /** Plan and favorite changes per visitor per minute (ten times that per IP). Defaults to WRITES_PER_MINUTE. */
   writesPerMinute?: number
@@ -108,10 +108,13 @@ export async function buildApp(env: Env, options: BuildOptions = {}): Promise<Ap
     logController: new QuietLogController(),
   }) as unknown as App
 
+  const llmPerMinute = options.llmPerMinute ?? 15
+  const assistantPerMinute = options.assistantPerMinute ?? 40
   const assistant = new AssistantService({
     provider,
     cache,
-    llmLimiter: new RateLimiter(options.llmPerMinute ?? 15, 60_000),
+    // Live-model calls cost money, so one IP (a room on one Wi-Fi) gets four browsers' worth before cache/local answers.
+    llmLimiter: VisitorLimiter.of(llmPerMinute, llmPerMinute * 4),
     neighborhoods: [...NEIGHBORHOODS],
     log: app.log,
     timeoutMs: options.llmTimeoutMs,
@@ -167,13 +170,13 @@ export async function buildApp(env: Env, options: BuildOptions = {}): Promise<Ap
   })
   await app.register(placeRoutes, { prefix: '/api' })
   const writesPerMinute = options.writesPerMinute ?? env.WRITES_PER_MINUTE
-  const guardWrite = writeGuard(new RateLimiter(writesPerMinute, 60_000), new RateLimiter(writesPerMinute * 10, 60_000))
+  const guardWrite = writeGuard(VisitorLimiter.of(writesPerMinute, writesPerMinute * 10))
   await app.register(planRoutes, { prefix: '/api', db, now: options.now, guardWrite })
   await app.register(favoriteRoutes, { prefix: '/api', db, guardWrite })
   await app.register(assistantRoutes, {
     prefix: '/api',
     service: assistant,
-    floodLimiter: new RateLimiter(options.assistantPerMinute ?? 40, 60_000),
+    floodLimiter: VisitorLimiter.of(assistantPerMinute, assistantPerMinute * 10),
     production,
   })
   await app.register(aiRoutes, { prefix: '/api', env, keyStore, provider, verifyKey })

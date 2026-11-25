@@ -5,7 +5,8 @@ import { mealMomentFor, seattleDateTime, seattleHour } from '../../../shared/dat
 import type { AssistantResponse } from '../../../shared/types.js'
 import type { AssistantService } from '../assistant/service.js'
 import { AppError } from '../errors.js'
-import type { RateLimiter } from '../rateLimit.js'
+import type { VisitorLimiter } from '../rateLimit.js'
+import { optionalClientId } from '../user.js'
 
 const knownNeighborhood = (value: string | null | undefined) =>
   NEIGHBORHOODS.find((name) => name.toLowerCase() === value?.trim().toLowerCase()) ?? null
@@ -26,14 +27,15 @@ const bodySchema = z.object({
 
 export type AssistantRouteOptions = {
   service: AssistantService
-  /** Hard ceiling per client; above it the endpoint answers 429 with a friendly message. */
-  floodLimiter: RateLimiter
+  /** Hard ceiling per browser (and per IP); above it the endpoint answers 429 with a friendly message. */
+  floodLimiter: VisitorLimiter
   production: boolean
 }
 
 export const assistantRoutes: FastifyPluginAsync<AssistantRouteOptions> = async (app, { service, floodLimiter, production }) => {
   app.post('/assistant', async (request): Promise<AssistantResponse> => {
-    if (!floodLimiter.allow(request.ip)) {
+    const client = { ip: request.ip, visitor: optionalClientId(request) }
+    if (!floodLimiter.allow(client)) {
       throw new AppError('RATE_LIMITED', 429, 'Lots of questions at once. Give it a few seconds and ask again.')
     }
     const body = bodySchema.parse(request.body)
@@ -47,7 +49,7 @@ export const assistantRoutes: FastifyPluginAsync<AssistantRouteOptions> = async 
         mealMoment: body.mealMoment ?? mealMomentFor(seattleHour()),
         seattleTime: seattleDateTime(),
       },
-      request.ip,
+      client,
     )
     request.log.info(
       {

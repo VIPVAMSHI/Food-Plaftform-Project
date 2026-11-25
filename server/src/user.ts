@@ -16,9 +16,13 @@ export function isValidClientId(value: unknown): value is string {
  */
 // TODO(auth): replace with the signed-in user's id from the session once real accounts exist.
 export function currentUserId(request: FastifyRequest): string {
+  const id = optionalClientId(request)
+  if (!id) throw new AppError('CLIENT_ID_REQUIRED', 400, 'This request needs the anonymous browser id. Reload the page and try again.')
+  return id
+}
+
+/** The anonymous id when the request has a valid one (only rate limits use it outside plans and favorites). */
+export function optionalClientId(request: FastifyRequest): string | null {
   const value = request.headers[CLIENT_ID_HEADER]
-  if (!isValidClientId(value)) {
-    throw new AppError('CLIENT_ID_REQUIRED', 400, 'This request needs the anonymous browser id. Reload the page and try again.')
-  }
-  return value.toLowerCase()
+  return isValidClientId(value) ? value.toLowerCase() : null
 }

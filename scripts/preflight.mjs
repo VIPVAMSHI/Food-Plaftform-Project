@@ -109,7 +109,7 @@ if (health?.configProblems?.length) {
 }
 
 if (!health) {
-  console.log(`\n${color.RED}RED: the server is not reachable. Nothing else can be checked.${color.reset}`)
+  console.log(`\n${color.RED}RED: the API did not answer /api/health (see above). Nothing else can be checked.${color.reset}`)
   console.log('Next: open BACKUP_PLAN.md, section "Deployed URL is down".')
   process.exit(1)
 }

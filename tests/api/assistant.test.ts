@@ -5,7 +5,7 @@ import { LlmError } from '../../server/src/assistant/provider'
 import { googleProvider, verifyGoogleKey } from '../../server/src/llm/google'
 import { LlmKeyStore } from '../../server/src/llm/keyStore'
 import { places } from '../../src/data/places'
-import { ask, candidateIds, fakeGoogle, json, makeApp, scriptedProvider, type TestApp } from './helpers'
+import { OTHER_VISITOR, VISITOR, as, ask, candidateIds, fakeGoogle, json, makeApp, scriptedProvider, type TestApp } from './helpers'
 
 const byId = new Map(places.map((place) => [place.id, place]))
 const RESPONSE_KEYS = ['maxBudget', 'maxTravelMinutes', 'neighborhood', 'preference', 'rankedIds', 'reasons', 'reply', 'source']
@@ -214,6 +214,33 @@ describe('assistant with a live model', () => {
     expect(codes).toEqual([200, 200, 200, 429, 429])
     const res = await ask(app, 'pizza')
     expect(res.body.error.message).toBe('Lots of questions at once. Give it a few seconds and ask again.')
+  })
+
+  it('counts limits per browser, so a room sharing one IP is not cut off by one person; the IP still has a ceiling', async () => {
+    const app = await start({ assistantPerMinute: 2 })
+    const askAs = async (visitor: string) => (await app.inject({ method: 'POST', url: '/api/assistant', headers: as(visitor), payload: { message: 'pizza', mode: 'walk' } })).statusCode
+    expect([await askAs(VISITOR), await askAs(VISITOR), await askAs(VISITOR)]).toEqual([200, 200, 429])
+    expect(await askAs(OTHER_VISITOR)).toBe(200)
+
+    const visitors = Array.from({ length: 12 }, (_, i) => `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`)
+    const fresh = await start({ assistantPerMinute: 2 })
+    const codes = []
+    for (const visitor of visitors) for (let i = 0; i < 2; i++) codes.push((await fresh.inject({ method: 'POST', url: '/api/assistant', headers: as(visitor), payload: { message: 'pizza' } })).statusCode)
+    expect(codes.filter((c) => c === 200)).toHaveLength(20)
+    expect(codes.filter((c) => c === 429)).toHaveLength(4)
+  })
+
+  it('gives each browser its own live-model budget, with a ceiling of four browsers per IP', async () => {
+    const provider = goodModel()
+    const app = await start({ provider, llmPerMinute: 1 })
+    const visitors = Array.from({ length: 6 }, (_, i) => `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`)
+    const sources = []
+    for (const [i, visitor] of visitors.entries()) {
+      const res = await app.inject({ method: 'POST', url: '/api/assistant', headers: as(visitor), payload: { message: ['pizza', 'ramen', 'tacos', 'thai curry', 'sushi', 'burgers'][i], mode: 'walk' } })
+      sources.push(res.json().source)
+    }
+    expect(provider.calls).toHaveLength(4)
+    expect(sources).toEqual(['llm', 'llm', 'llm', 'llm', 'local', 'local'])
   })
 })
 

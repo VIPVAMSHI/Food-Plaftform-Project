@@ -7,7 +7,7 @@ import { AssistantService } from '../src/assistant/service.js'
 import { loadEnv } from '../src/env.js'
 import { googleProvider } from '../src/llm/google.js'
 import { LlmKeyStore } from '../src/llm/keyStore.js'
-import { RateLimiter } from '../src/rateLimit.js'
+import { VisitorLimiter } from '../src/rateLimit.js'
 
 /**
  * Asks the live model the demo queries and writes the answers to server/src/assistant/demoCache.ts,
@@ -25,7 +25,7 @@ if (env.LLM_API_KEY && env.LLM_MODEL) {
   const service = new AssistantService({
     provider: googleProvider(new LlmKeyStore(env.LLM_API_KEY, null), env.LLM_MODEL),
     cache,
-    llmLimiter: new RateLimiter(1000, 60_000),
+    llmLimiter: VisitorLimiter.of(1000, 1000),
     neighborhoods: [...NEIGHBORHOODS],
     log: { info: () => undefined, warn: () => undefined },
   })

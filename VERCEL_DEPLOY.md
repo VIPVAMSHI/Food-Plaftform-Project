@@ -125,5 +125,5 @@ Function logs are under Project → Logs. They never contain keys, tokens or cha
 ## Limits worth knowing
 
 - **Function timeout:** 15 s (`vercel.json`). The model gets 6 s, then the cache or the local matcher answers; the browser falls back locally at 9 s.
-- **Per browser:** up to 50 plans, and 60 changes per minute (600 per network IP). Rate limits are counted per function instance, so they are approximate.
+- **Per browser:** up to 50 plans; 60 changes, 40 assistant questions and 15 live-model answers per minute (per network IP: 600, 400 and 60, so a room on one Wi-Fi is fine). Over a limit the assistant answers from the cache or the local matcher, with no error shown. Rate limits are counted per function instance, so they are approximate.
 - **Plans belong to the browser, not a person.** Plans live under an anonymous id stored in that browser. Clearing site data or using another browser starts empty. There is no login.

@@ -66,7 +66,7 @@ Artifacts: `artifacts/` (Playwright report, chaos, security, eval).
 
 ## 6. MANUAL CHECKLIST
 
-1. Push: `git push -u origin vercel-ready` (done by the agent if credentials allow; see PROGRESS.md).
+1. Push: done. Branch `vercel-ready` and tag `vercel-ready-v1` are on `origin` (github.com/VIPVAMSHI/Food-Plaftform-Project). `main` is untouched.
 2. Turso: install the CLI, `turso db create seattle-food`, then `turso db show seattle-food --url` and `turso db tokens create seattle-food` (VERCEL_DEPLOY.md step 2).
 3. Run `npm run db:migrate` with that URL and token. It should print `schema 0 → 1`.
 4. Vercel: Import the repo at https://vercel.com/new and pick the `vercel-ready` branch (or merge it first). Add `DATABASE_URL` and `DATABASE_AUTH_TOKEN` (Sensitive) for Production and Preview. Optionally add `LLM_API_KEY` (Sensitive) and `LLM_MODEL=gemini-2.5-flash-lite`. Then Deploy.

@@ -1,19 +1,28 @@
-import { serverPath } from '../src/app.js'
-import { Db } from '../src/db/index.js'
-import { EXPECTED_PLACE_COUNT, seedPlaces } from '../src/db/seed.js'
-import { loadEnv } from '../src/env.js'
+import { describe, openTarget } from './db-target.js'
 
 /**
- * Clears every plan and favorite and re-seeds places, so the demo starts from a known state.
- * Safe while the server is running (SQLite handles the locking); the app shows the empty state on next load.
- * The assistant cache is kept on purpose: it holds the warmed demo answers.
+ * Clears every plan and favorite (all visitors) so the demo starts from a known state.
+ * A local file database resets right away. A remote database (production) needs an explicit flag:
+ *   npm run reset-demo -- --production
+ * The assistant cache is not touched.
  */
-const env = loadEnv()
-const db = new Db(serverPath(env.DB_PATH))
-const removed = db.resetUserData()
-seedPlaces(db)
-const counts = db.counts()
-db.close()
-console.log(`Reset ${serverPath(env.DB_PATH)}: removed ${removed.plans} plans and ${removed.favorites} favorites.`)
-console.log(`Now: places=${counts.places} (expected ${EXPECTED_PLACE_COUNT}), plans=${counts.plans}, favorites=${counts.favorites}`)
-if (counts.places !== EXPECTED_PLACE_COUNT || counts.plans !== 0 || counts.favorites !== 0) process.exit(1)
+const { db, config } = openTarget()
+if (!config.local && !process.argv.includes('--production')) {
+  console.error(
+    `Refusing to reset ${describe(config)}: it is a remote database, probably production.\n` +
+      'This deletes every visitor\'s plans and favorites. If you mean it, run: npm run reset-demo -- --production',
+  )
+  process.exit(1)
+}
+try {
+  const removed = await db.resetUserData()
+  const counts = await db.counts()
+  console.log(`Reset ${describe(config)}: removed ${removed.plans} plans and ${removed.favorites} favorites.`)
+  console.log(`Now: plans=${counts.plans}, favorites=${counts.favorites}`)
+  if (counts.plans !== 0 || counts.favorites !== 0) process.exitCode = 1
+} catch (error) {
+  console.error(`Reset failed for ${describe(config)}: ${error instanceof Error ? error.message : String(error)}. Run npm run db:migrate first if the database is new.`)
+  process.exitCode = 1
+} finally {
+  await db.close()
+}

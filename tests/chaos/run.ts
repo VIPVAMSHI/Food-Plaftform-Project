@@ -18,7 +18,8 @@ const results: Array<{ name: string; ok: boolean; detail: string }> = []
 
 function dataEnv() {
   const dir = mkdtempSync(join(tmpdir(), 'sfd-chaos-'))
-  return { dir, env: { PORT: String(nextPort++), DB_PATH: join(dir, 'app.db'), CACHE_PATH: join(dir, 'cache.json') } }
+  const dbFile = join(dir, 'app.db')
+  return { dir, dbFile, env: { PORT: String(nextPort++), DATABASE_URL: `file:${dbFile}`, CACHE_PATH: join(dir, 'cache.json') } as Record<string, string> }
 }
 
 async function step(name: string, fn: () => Promise<string>) {
@@ -39,7 +40,10 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const json = async (res: Response) => res.json() as Promise<Record<string, unknown> & { plans?: unknown[]; error?: { code: string } }>
-const post = (url: string, body: unknown) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+const VISITOR = { 'x-client-id': '5c1d2e3f-4a5b-4c6d-8e7f-90a1b2c3d4e5' }
+const get = (url: string) => fetch(url, { headers: VISITOR })
+const put = (url: string) => fetch(url, { method: 'PUT', headers: VISITOR })
+const post = (url: string, body: unknown) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...VISITOR }, body: JSON.stringify(body) })
 const PLACES = ['wolf', 'canlis', 'artusi', 'lamedusa', 'pestle', 'bastille', 'chowder', 'doughzone']
 const futureDate = (i: number) => `2027-0${1 + (i % 9)}-${String(10 + (i % 18)).padStart(2, '0')}`
 
@@ -87,35 +91,39 @@ await step('SIGTERM with an open keep-alive connection and a stalled request sti
   return `exit 0 in ${took} ms with the connection still open`
 })
 
-await step('Plans and favorites survive a restart', async () => {
-  const { env } = dataEnv()
+await step('Plans and favorites survive a restart (DB_PATH, as render.yaml sets it)', async () => {
+  const { dbFile, env: base } = dataEnv()
+  const { DATABASE_URL: _unused, ...rest } = base
+  const env = { ...rest, DB_PATH: dbFile }
   let server = await startServer(env)
   assert((await post(`${server.url}/api/plans`, { placeId: 'wolf', date: '2027-03-04', time: '19:00' })).status === 201, 'create failed')
-  await fetch(`${server.url}/api/favorites/canlis`, { method: 'PUT' })
+  await put(`${server.url}/api/favorites/canlis`)
   await server.stop()
   server = await startServer(env)
-  const plans = (await json(await fetch(`${server.url}/api/plans`))).plans ?? []
-  const favorites = ((await json(await fetch(`${server.url}/api/favorites`))) as { favorites: unknown[] }).favorites
+  const plans = (await json(await get(`${server.url}/api/plans`))).plans ?? []
+  const favorites = ((await json(await get(`${server.url}/api/favorites`))) as { favorites: unknown[] }).favorites
   await server.stop()
   assert(plans.length === 1 && favorites.length === 1, `after restart: ${plans.length} plans, ${favorites.length} favorites`)
   return '1 plan and 1 favorite after restart'
 })
 
 await step('kill -9 during a burst of 200 writes leaves a consistent database', async () => {
-  const { env } = dataEnv()
+  const { dbFile, env: base } = dataEnv()
+  // The per-IP write limit (60/min) would refuse most of the burst before the kill; this check is about crash safety.
+  const env = { ...base, WRITES_PER_MINUTE: '1000' }
   let server = await startServer(env)
   const writes = Array.from({ length: 200 }, (_, i) => post(`${server.url}/api/plans`, { placeId: PLACES[i % PLACES.length], date: futureDate(i), time: '19:00' }).then((r) => r.status).catch(() => 0))
   await new Promise((r) => setTimeout(r, 40))
   await server.stop('SIGKILL')
   const statuses = await Promise.all(writes)
   const acknowledged = statuses.filter((s) => s === 201).length
-  const db = new DatabaseSync(env.DB_PATH)
+  const db = new DatabaseSync(dbFile)
   const integrity = (db.prepare('PRAGMA integrity_check').get() as { integrity_check: string }).integrity_check
   db.close()
   assert(integrity === 'ok', `integrity_check: ${integrity}`)
   server = await startServer(env)
   const health = await json(await fetch(`${server.url}/api/health`))
-  const stored = ((await json(await fetch(`${server.url}/api/plans`))).plans ?? []).length
+  const stored = ((await json(await get(`${server.url}/api/plans`))).plans ?? []).length
   await server.stop()
   assert(health.status === 'ok' && health.places === 68, `health after crash: ${JSON.stringify(health)}`)
   assert(stored >= acknowledged, `${acknowledged} writes were acknowledged but only ${stored} are stored`)
@@ -134,12 +142,12 @@ await step('Corrupt assistant cache file is ignored', async () => {
 })
 
 await step('Corrupt database file → clear startup error, non-zero exit', async () => {
-  const { env } = dataEnv()
-  writeFileSync(env.DB_PATH, 'this is not a sqlite database'.repeat(200))
+  const { dbFile, env } = dataEnv()
+  writeFileSync(dbFile, 'this is not a sqlite database'.repeat(200))
   const server = await startServer(env, { waitForHealth: false })
   const code = await waitForExit(server)
   assert(code !== null && code !== 0, `exit code ${code}`)
-  assert(/DB_PATH|database/i.test(server.logs()), `no helpful message: ${server.logs().slice(-300)}`)
+  assert(/DATABASE_URL|DB_PATH|database/i.test(server.logs()), `no helpful message: ${server.logs().slice(-300)}`)
   return `exit ${code}: "${server.logs().trim().split('\n').find((l) => /database/i.test(l))?.slice(0, 110)}"`
 })
 
@@ -173,7 +181,7 @@ await step('Burst of 300 mixed requests, 100 at a time: no 5xx, server stays up'
   const t0 = performance.now()
   const failure = (error: unknown) => `network:${(error as { cause?: { code?: string } }).cause?.code ?? 'unknown'}`
   const one = (i: number) =>
-    (i % 5 === 0 ? post(`${server.url}/api/assistant`, { message: ['pizza', 'ramen', 'tacos'][i % 3] }) : fetch(`${server.url}${paths[i % paths.length]}`)).then(
+    (i % 5 === 0 ? post(`${server.url}/api/assistant`, { message: ['pizza', 'ramen', 'tacos'][i % 3] }) : get(`${server.url}${paths[i % paths.length]}`)).then(
       (r) => r.status,
       failure,
     )

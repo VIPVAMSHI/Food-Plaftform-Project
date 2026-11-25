@@ -2,9 +2,9 @@ import { ask, daysAhead, expect, openApp, test } from './fixtures'
 
 /** Runs in the mobile project only (see playwright.config.ts). */
 test.describe('touch targets', () => {
-  test('every visible control is at least 44×44 px on mobile', async ({ page }) => {
-    await page.request.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
-    await page.request.put('/api/favorites/canlis')
+  test('every visible control is at least 44×44 px on mobile', async ({ page, api }) => {
+    await api.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
+    await api.put('/api/favorites/canlis')
     const small: string[] = []
     const check = async (state: string) => {
       const found = await page.evaluate(() => {

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.13"
+    "node": "^22.13.0"
   },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names web,api --prefix-colors cyan,green \"vite\" \"npm --prefix server run dev\"",
@@ -25,8 +25,9 @@
     "test:all": "npm run lint && npm run build && npm run scan:dist && npm test && npm run test:eval && npm run test:e2e && npm run test:chaos && npm run test:security",
     "scan:dist": "node scripts/scan-dist.mjs",
     "preflight": "node scripts/preflight.mjs",
-    "seed": "npm --prefix server run seed",
-    "reset-demo": "npm --prefix server run reset-demo"
+    "db:migrate": "npm --prefix server run db:migrate",
+    "reset-demo": "npm --prefix server run reset-demo --",
+    "cache:build": "npm --prefix server run cache:build"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

@@ -30,7 +30,7 @@ These create and delete plans for the demo user. Run `npm run reset-demo` in the
 | --- | --- | --- |
 | Build command | `npm ci && npm run build` | Installs both packages (root and `server/`), type-checks, builds `dist/`. |
 | Start command | `npm start` | Runs the server with `NODE_ENV=production`, serving `dist/` and `/api`. |
-| Node | 22 (`NODE_VERSION`, `.node-version`) | `node:sqlite` needs Node 22.13 or newer. |
+| Node | 22 (`NODE_VERSION`, `.node-version`) | `package.json` engines: `^22.13.0`. |
 | `NODE_ENV` | **do not set** | Setting it to `production` at build time skips dev dependencies (Vite, TypeScript) and the build fails. `npm start` sets it for the server. |
 | `LLM_API_KEY` | secret, entered in the dashboard | Only the server reads it. Never in git, never in a `VITE_` variable. |
 | `DB_PATH`, `CACHE_PATH` | `/var/data/...` | On the persistent disk. |
@@ -38,7 +38,7 @@ These create and delete plans for the demo user. Run `npm run reset-demo` in the
 ## Disk: persistent vs ephemeral
 
 - **Starter plan (in `render.yaml`)**: the disk at `/var/data` keeps plans, favorites, and the warmed assistant cache across deploys and restarts.
-- **Free plan**: no disk. Remove the `disk:` block and set `DB_PATH=./data/bite.db` and `CACHE_PATH=./data/assistant-cache.json`. The filesystem is **ephemeral**: every deploy, restart, or spin-down wipes plans and favorites. Places are re-seeded on boot and the demo cache re-warms, so the demo still works, starting from a clean slate.
+- **Free plan**: no disk. Remove the `disk:` block and set `DB_PATH=./data/bite.db` and `CACHE_PATH=./data/assistant-cache.json`. The filesystem is **ephemeral**: every deploy, restart, or spin-down wipes plans and favorites. Places ship with the code and the demo cache re-warms, so the demo still works, starting from a clean slate.
 
 ## Cold starts
 

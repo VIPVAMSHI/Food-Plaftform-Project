@@ -19,6 +19,11 @@ function planError(error: unknown): string {
       return error.message.startsWith('Plan') ? 'That plan was already removed.' : 'That restaurant is no longer in the list.'
     case 'BAD_REQUEST':
       return 'Pick a valid date and time.'
+    case 'PLAN_LIMIT':
+    case 'RATE_LIMITED':
+      return error.message
+    case 'DB_UNAVAILABLE':
+      return "Saved plans can't be reached right now. Try again in a moment."
     default:
       return OFFLINE
   }
@@ -26,7 +31,10 @@ function planError(error: unknown): string {
 
 let migration: Promise<void> | null = null
 
-/** Uploads pre-backend localStorage data once, only if the server has nothing yet. Concurrent callers share one run. */
+/**
+ * Uploads pre-backend localStorage data once, under this browser's anonymous id (sent with every request),
+ * only if the server has nothing for that id yet. Concurrent callers share one run; a failed run is retried on the next load.
+ */
 function migrateLegacy(knownIds: Set<string>): Promise<void> {
   migration ??= runMigration(knownIds).catch((error: unknown) => {
     migration = null
@@ -49,7 +57,7 @@ async function runMigration(knownIds: Set<string>) {
   markMigrated()
 }
 
-/** Plans and favorites for the demo user, stored on the server. */
+/** Plans and favorites for this browser's anonymous id, stored on the server. */
 export function useUserData(knownIds: Set<string>) {
   const [plans, setPlans] = useState<Plan[]>([])
   const [plansStatus, setPlansStatus] = useState<LoadStatus>('loading')

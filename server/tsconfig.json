@@ -14,5 +14,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "../shared/**/*.ts", "../src/data/places.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "../api/**/*.ts", "../shared/**/*.ts", "../src/data/places.ts"]
 }

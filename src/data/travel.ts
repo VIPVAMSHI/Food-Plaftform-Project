@@ -1,1 +1,1 @@
-export { formatMiles, haversineMiles, travelMinutes } from '../../shared/travel'
+export { formatMiles, haversineMiles, travelMinutes } from '../../shared/travel.js'

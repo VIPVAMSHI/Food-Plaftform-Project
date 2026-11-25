@@ -44,7 +44,7 @@ export default defineConfig({
         env: {
           PORT: String(PORT),
           HOST: '127.0.0.1',
-          DB_PATH: `${DATA}/app.db`,
+          DATABASE_URL: `file:${DATA}/app.db`,
           CACHE_PATH: `${DATA}/assistant-cache.json`,
           LLM_API_KEY: '',
           // Stage settings, whatever is in server/.env: the audience never sees the "add an API key" prompt.

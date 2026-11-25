@@ -2,7 +2,7 @@ import { cacheKey, finalize, prepare, rankLocal, type CoreInput } from '../../..
 import { mealMomentFor, seattleDateTime, seattleHour } from '../../../shared/dates.js'
 import { toAssistantPlace } from '../../../shared/places.js'
 import type { AssistantPlace, AssistantResponse, AssistantSource, MealMoment, TravelMode } from '../../../shared/types.js'
-import type { Db } from '../db/index.js'
+import { PLACES } from '../places.js'
 import type { RateLimiter } from '../rateLimit.js'
 import type { AssistantCache } from './cache.js'
 import { MAX_CANDIDATES_FOR_MODEL, MAX_OUTPUT_TOKENS, SYSTEM_PROMPT, buildUserPrompt } from './prompt.js'
@@ -29,7 +29,6 @@ export type AnswerMeta = {
 type Logger = { info: (obj: object, msg: string) => void; warn: (obj: object, msg: string) => void }
 
 export type AssistantServiceDeps = {
-  db: Db
   provider: LlmProvider
   cache: AssistantCache
   llmLimiter: RateLimiter
@@ -52,7 +51,7 @@ export class AssistantService {
   }
 
   #places(mode: TravelMode): AssistantPlace[] {
-    return this.deps.db.listPlaces().map((place) => toAssistantPlace(place, mode))
+    return PLACES.map((place) => toAssistantPlace(place, mode))
   }
 
   async answer(input: AssistantInput, clientKey: string, options: { skipCache?: boolean } = {}): Promise<{ response: AssistantResponse; meta: AnswerMeta }> {

@@ -1,4 +1,4 @@
-import { travelMinutes } from './travel'
+import { travelMinutes } from './travel.js'
 import type { AssistantPlace, PlaceRecord, TravelMode } from './types'
 
 export function toAssistantPlace(place: PlaceRecord, mode: TravelMode): AssistantPlace {

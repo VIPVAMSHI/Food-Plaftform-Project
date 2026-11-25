@@ -6,7 +6,7 @@ for (const timezoneId of ['Asia/Tokyo', 'America/New_York', 'Pacific/Kiritimati'
   test.describe(`device timezone ${timezoneId}`, () => {
     test.use({ timezoneId })
 
-    test('shows Seattle today and saves a plan for it', async ({ page }) => {
+    test('shows Seattle today and saves a plan for it', async ({ page, api }) => {
       const today = seattleToday()
       await openApp(page)
       await expect(page.getByTestId('plan-date-chip')).toContainText(formatShortDate(today))
@@ -15,7 +15,7 @@ for (const timezoneId of ['Asia/Tokyo', 'America/New_York', 'Pacific/Kiritimati'
       await page.getByTestId('schedule-time').fill('23:30')
       await page.getByTestId('save-plan').click()
       await expect(page.getByTestId('confirmation')).toBeVisible()
-      const plans = (await (await page.request.get('/api/plans')).json()).plans
+      const plans = (await (await api.get('/api/plans')).json()).plans
       expect(plans).toMatchObject([{ date: today, time: '23:30' }])
     })
   })

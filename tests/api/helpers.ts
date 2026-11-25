@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildApp, type App, type BuildOptions } from '../../server/src/app'
 import type { LlmProvider, LlmRequest, LlmResult } from '../../server/src/assistant/provider'
+import { migrate } from '../../server/src/db/schema'
 import { loadEnv } from '../../server/src/env'
 
 /** Fixed "now" for date rules: Tuesday 2026-11-24, 12:00 in Seattle. */
@@ -17,17 +18,27 @@ export function tempDir(): string {
 
 export type TestApp = { app: App; dir: string }
 
-export async function makeApp(options: BuildOptions & { dir?: string; env?: Record<string, string> } = {}): Promise<TestApp> {
+/** Two anonymous browsers. Plan and favorite requests must name one in the X-Client-Id header. */
+export const VISITOR = '0b6f1c7e-9a2d-4c1b-8e3f-5a7d9c2e4b10'
+export const OTHER_VISITOR = '7e2a9d41-3c5b-4f8e-a1d6-2b9c8e7f6a35'
+export const as = (visitor: string) => ({ 'x-client-id': visitor })
+
+/**
+ * A test app on its own `file:` database in `dir`, migrated the way the local server does on boot.
+ * `migrateDb: false` leaves the database empty (to test the schema check).
+ */
+export async function makeApp(options: BuildOptions & { dir?: string; env?: Record<string, string>; migrateDb?: boolean } = {}): Promise<TestApp> {
   const dir = options.dir ?? tempDir()
   const env = loadEnv({
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
-    DB_PATH: join(dir, 'test.db'),
+    DATABASE_URL: `file:${join(dir, 'test.db')}`,
     CACHE_PATH: join(dir, 'cache.json'),
     ...options.env,
   })
   const app = await buildApp(env, { distDir: join(dir, 'dist'), now: () => NOW, provider: options.provider ?? offlineProvider(), ...options })
   await app.ready()
+  if (options.migrateDb !== false && app.db.config) await migrate(await app.db.client())
   return { app, dir }
 }
 

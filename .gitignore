@@ -8,6 +8,9 @@ dist
 
 agent-tools
 
+# Vercel CLI link and local build output
+.vercel
+
 # Local database files (created by the server)
 server/data/
 server/dist

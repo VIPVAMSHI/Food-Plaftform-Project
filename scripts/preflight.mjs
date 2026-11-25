@@ -2,10 +2,12 @@
 /**
  * Backstage preflight. Usage:
  *   npm run preflight                          # checks http://127.0.0.1:3001
+ *   npm run preflight -- https://your-app.vercel.app
  *   npm run preflight -- https://your-app.onrender.com
  * Prints GREEN / YELLOW / RED per check, finishes in under 30 s, exits 1 if anything is RED.
- * Read-only except for one probe plan, which it creates and deletes again.
+ * Read-only except for one probe plan, which it creates and deletes again under a throwaway visitor id.
  */
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -42,7 +44,30 @@ async function call(path, init = {}) {
   return { status: response.status, headers: response.headers, text, json, ms }
 }
 
-const postJson = (path, body) => call(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+/** Plans and favorites belong to an anonymous browser id. Preflight uses throwaway ones, so the audience's data is never touched. */
+const PROBE_VISITOR = { 'x-client-id': randomUUID() }
+const OTHER_VISITOR = { 'x-client-id': randomUUID() }
+const postJson = (path, body, visitor = PROBE_VISITOR) => call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...visitor }, body: JSON.stringify(body) })
+
+/** What a failed /api/health means on Vercel, from the booleans it returns. */
+function explainChecks(checks = {}) {
+  const fixes = []
+  if (checks.databaseUrl === false) fixes.push('DATABASE_URL is not set (Vercel: Settings → Environment Variables, then redeploy)')
+  else if (checks.databaseReachable === false) fixes.push('the database cannot be reached: check DATABASE_URL and DATABASE_AUTH_TOKEN')
+  else if (checks.databaseSchema === false) fixes.push('the database has no tables yet: run npm run db:migrate against it')
+  return fixes.join('; ')
+}
+
+/** Vercel answers some URLs itself before the app runs: a login wall, or its own 404 when the API was not deployed. */
+function vercelWall(r) {
+  if ((r.status === 401 || r.status === 403) && !r.json) {
+    return 'Vercel Deployment Protection is asking for a login. Use the production domain, or see VERCEL_DEPLOY.md, "Deployment Protection".'
+  }
+  if (r.status === 404 && !r.json && (r.headers.get('x-vercel-error') || /NOT_FOUND/.test(r.text))) {
+    return 'Vercel has no API at this URL (static-only deploy). Check that api/index.ts and vercel.json were deployed.'
+  }
+  return null
+}
 
 function seattleNow() {
   const parts = Object.fromEntries(
@@ -67,13 +92,21 @@ console.log(`Preflight for ${BASE}\n`)
 let health
 await check('Server and database (/api/health)', async () => {
   const r = await call('/api/health')
+  const wall = vercelWall(r)
+  if (wall) return report('RED', 'Server and database (/api/health)', wall)
   health = r.json
-  if (r.status !== 200 || r.json?.status !== 'ok') return report('RED', 'Server and database (/api/health)', `HTTP ${r.status}, ${r.text.slice(0, 120)}`)
-  if (!r.json.db) return report('RED', 'Server and database (/api/health)', 'database not OK')
+  const fix = explainChecks(r.json?.checks)
+  if (r.status !== 200 || r.json?.status !== 'ok') return report('RED', 'Server and database (/api/health)', fix || `HTTP ${r.status}, ${r.text.slice(0, 120)}`)
+  if (!r.json.db) return report('RED', 'Server and database (/api/health)', fix || 'database not OK')
   if (r.json.places !== EXPECTED_PLACES) return report('RED', 'Server and database (/api/health)', `${r.json.places} places, expected ${EXPECTED_PLACES}`)
   const cold = r.ms > 5000 ? ' (slow: the host was probably asleep; it is warm now)' : ''
-  report(r.ms > 5000 ? 'YELLOW' : 'GREEN', 'Server and database (/api/health)', `${r.json.places} places, version ${r.json.version}, up ${r.json.uptimeSeconds}s, ${r.ms} ms${cold}`)
+  const where = r.json.runtime === 'vercel' ? 'Vercel function' : 'Node server'
+  report(r.ms > 5000 ? 'YELLOW' : 'GREEN', 'Server and database (/api/health)', `${where}, ${r.json.places} places, version ${r.json.version}, up ${r.json.uptimeSeconds}s, ${r.ms} ms${cold}`)
 })
+
+if (health?.configProblems?.length) {
+  report('YELLOW', 'Configuration', `ignored invalid settings: ${health.configProblems.join(', ')} (see .env.example / VERCEL_DEPLOY.md)`)
+}
 
 if (!health) {
   console.log(`\n${color.RED}RED: the server is not reachable. Nothing else can be checked.${color.reset}`)
@@ -141,20 +174,14 @@ for (const query of DEMO_QUERIES) {
 await check('Plans round trip (create + delete a probe plan)', async () => {
   const name = 'Plans round trip (create + delete a probe plan)'
   const probe = { placeId: 'wolf', date: '2099-12-31', time: '19:00' }
-  const existing = (await call('/api/plans')).json?.plans ?? []
-  for (const plan of existing.filter((p) => p.placeId === probe.placeId && p.date === probe.date)) await call(`/api/plans/${plan.id}`, { method: 'DELETE' })
   const created = await postJson('/api/plans', probe)
   if (created.status !== 201) return report('RED', name, `create: HTTP ${created.status} ${created.json?.error?.message ?? ''}`)
-  const removed = await call(`/api/plans/${created.json.plan.id}`, { method: 'DELETE' })
+  const others = await call('/api/plans', { headers: OTHER_VISITOR })
+  const leaked = (others.json?.plans ?? []).some((p) => p.id === created.json.plan.id)
+  const removed = await call(`/api/plans/${created.json.plan.id}`, { method: 'DELETE', headers: PROBE_VISITOR })
   if (removed.status !== 204) return report('RED', name, `delete: HTTP ${removed.status}`)
-  report('GREEN', name, `${created.ms + removed.ms} ms, nothing left behind`)
-})
-
-await check('Demo data', async () => {
-  const plans = (await call('/api/plans')).json?.plans ?? []
-  const favorites = (await call('/api/favorites')).json?.favorites ?? []
-  const detail = `${plans.length} plans, ${favorites.length} saved places`
-  report(plans.length || favorites.length ? 'YELLOW' : 'GREEN', 'Demo data', plans.length || favorites.length ? `${detail} left from rehearsal (fine if intended; reset: npm run reset-demo on the host)` : `${detail}: clean slate`)
+  if (others.status !== 200 || leaked) return report('RED', name, `another browser ${leaked ? 'can see' : `got HTTP ${others.status} for`} the probe plan`)
+  report('GREEN', name, `${created.ms + removed.ms} ms, private to its browser, nothing left behind`)
 })
 
 await check('Stage settings', async () => {

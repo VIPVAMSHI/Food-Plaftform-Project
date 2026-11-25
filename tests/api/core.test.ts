@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { googleProvider } from '../../server/src/llm/google'
 import { LlmKeyStore } from '../../server/src/llm/keyStore'
-import { makeApp, tempDir, writeDist, type TestApp } from './helpers'
+import { VISITOR, as, makeApp, tempDir, writeDist, type TestApp } from './helpers'
 
 let current: TestApp | undefined
 afterEach(async () => {
@@ -14,24 +14,37 @@ async function start(...args: Parameters<typeof makeApp>) {
 }
 
 describe('health', () => {
-  it('reports status, version, uptime, place count, db, and an llm boolean only', async () => {
+  it('reports status, version, uptime, place count, db, and booleans only for configuration', async () => {
     const app = await start()
     const res = await app.inject('/api/health')
     expect(res.statusCode).toBe(200)
     expect(res.headers['cache-control']).toBe('no-store')
     const body = res.json()
-    expect(Object.keys(body).sort()).toEqual(['db', 'llmConfigured', 'places', 'status', 'time', 'uptimeSeconds', 'version'])
-    expect(body).toMatchObject({ status: 'ok', places: 68, db: true, llmConfigured: false })
+    expect(Object.keys(body).sort()).toEqual(['checks', 'configProblems', 'db', 'llmConfigured', 'places', 'runtime', 'status', 'time', 'uptimeSeconds', 'version'])
+    expect(body).toMatchObject({ status: 'ok', places: 68, db: true, llmConfigured: false, runtime: 'node', configProblems: [] })
+    expect(body.checks).toEqual({ databaseUrl: true, databaseAuthToken: true, databaseReachable: true, databaseSchema: true, llmApiKey: false, llmModel: false })
     expect(typeof body.version).toBe('string')
     expect(Number.isInteger(body.uptimeSeconds)).toBe(true)
   })
 
-  it('answers 503 degraded when the database is gone', async () => {
+  it('never returns the key, the model name or the database URL and token', async () => {
+    const key = 'test-google-secret-value-1234567890'
+    const app = await start({
+      env: { LLM_API_KEY: key, LLM_MODEL: 'secret-model-name', DATABASE_URL: 'libsql://secret-db-host.example.invalid', DATABASE_AUTH_TOKEN: 'secret-db-token-0123456789' },
+      provider: undefined,
+      migrateDb: false,
+    })
+    const res = await app.inject('/api/health')
+    for (const secret of [key, 'secret-model-name', 'secret-db-host', 'secret-db-token']) expect(res.body).not.toContain(secret)
+    expect(res.json().checks).toMatchObject({ databaseUrl: true, databaseAuthToken: true, databaseReachable: false, llmApiKey: true, llmModel: true })
+  })
+
+  it('answers 503 degraded when the database is gone; places still come from the bundled data', async () => {
     const app = await start()
-    app.db.close()
+    await app.db.close()
     const res = await app.inject('/api/health')
     expect(res.statusCode).toBe(503)
-    expect(res.json()).toMatchObject({ status: 'degraded', db: false, places: 0 })
+    expect(res.json()).toMatchObject({ status: 'degraded', db: false, places: 68, checks: { databaseReachable: false } })
   })
 })
 
@@ -60,7 +73,7 @@ describe('places', () => {
     const hood = await app.inject(`/api/places?neighborhood=${encodeURIComponent("Ballard' OR '1'='1")}`)
     expect(hood.json().count).toBe(0)
     expect((await app.inject('/api/health')).json().places).toBe(68)
-    expect((await app.inject('/api/plans')).statusCode).toBe(200)
+    expect((await app.inject({ url: '/api/plans', headers: as(VISITOR) })).statusCode).toBe(200)
   })
 
   it('returns one place, 404 for an unknown id, 400 for a bad filter', async () => {

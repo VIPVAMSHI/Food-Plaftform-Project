@@ -1,5 +1,7 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { seattleToday } from '../shared/dates'
+import { CLIENT_ID_KEY } from '../src/state/clientId'
 
 export const WEATHER_URL = 'https://api.open-meteo.com/**'
 
@@ -7,9 +9,21 @@ type Fixtures = {
   /** Console errors and uncaught page errors seen during the test. Asserted empty unless a test opts out. */
   consoleErrors: string[]
   allowConsoleErrors: boolean
+  /** This test's anonymous browser id: fresh per test, so every test starts with no plans or favorites. */
+  visitorId: string
+  /** API calls made as the same visitor as `page`. */
+  api: APIRequestContext
 }
 
 export const test = base.extend<Fixtures>({
+  // Playwright reads fixture dependencies from this pattern, so it must be a (here empty) destructuring.
+  // eslint-disable-next-line no-empty-pattern
+  visitorId: async ({}, use) => use(randomUUID()),
+  api: async ({ playwright, baseURL, visitorId }, use) => {
+    const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { 'x-client-id': visitorId } })
+    await use(api)
+    await api.dispose()
+  },
   allowConsoleErrors: [false, { option: true }],
   consoleErrors: async ({ page, allowConsoleErrors }, use) => {
     const errors: string[] = []
@@ -20,14 +34,11 @@ export const test = base.extend<Fixtures>({
     await use(errors)
     if (!allowConsoleErrors) expect(errors, 'console errors during the test').toEqual([])
   },
-  page: async ({ page, request }, use) => {
+  page: async ({ page, visitorId }, use) => {
     // Live weather by default so runs do not depend on the venue network; failure tests override this.
     await page.route(WEATHER_URL, (route) => route.fulfill({ json: { current: { temperature_2m: 49.6, weather_code: 61 } } }))
-    // Clean slate for the single demo user.
-    const plans = (await (await request.get('/api/plans')).json()).plans as Array<{ id: string }>
-    for (const plan of plans) await request.delete(`/api/plans/${plan.id}`)
-    const favorites = (await (await request.get('/api/favorites')).json()).favorites as Array<{ placeId: string }>
-    for (const favorite of favorites) await request.delete(`/api/favorites/${favorite.placeId}`)
+    // The app reuses an id already in storage, so the browser and `api` act as the same visitor.
+    await page.addInitScript(([key, id]) => localStorage.getItem(key) || localStorage.setItem(key, id), [CLIENT_ID_KEY, visitorId] as const)
     await use(page)
   },
 })

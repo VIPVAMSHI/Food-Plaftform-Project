@@ -94,14 +94,30 @@ export type UpdatePlanInput = { date?: string; time?: string }
 export type Favorite = { placeId: string; createdAt: string }
 
 export type HealthResponse = {
+  /** `degraded` (HTTP 503) when plans and favorites cannot be stored. Places and the assistant still work. */
   status: 'ok' | 'degraded'
   version: string
   uptimeSeconds: number
+  /** Places served from the bundled dataset. */
   places: number
+  /** The database is reachable and migrated. */
   db: boolean
-  /** Whether an LLM key is configured. Never the key itself. */
+  /** Whether an LLM key and model are configured. Never the values. */
   llmConfigured: boolean
   time: string
+  runtime: 'vercel' | 'node'
+  /** Presence and reachability only, as booleans. No value is ever returned. */
+  checks: {
+    databaseUrl: boolean
+    /** Present, or not needed (a local file database). */
+    databaseAuthToken: boolean
+    databaseReachable: boolean
+    databaseSchema: boolean
+    llmApiKey: boolean
+    llmModel: boolean
+  }
+  /** Names of environment variables that were set but invalid and are being ignored. */
+  configProblems: string[]
 }
 
 /** Whether the live AI assistant has an API key. The key itself is never sent to the browser. */

@@ -102,7 +102,7 @@ await step('Production logs contain neither the key nor user messages', async ()
   // Built from pieces so this file itself never contains a real-looking key.
   const key = 'AIza' + 'SECURITYPROBE' + 'x'.repeat(30)
   const message = 'pasta under $30 my-private-message-7f3a'
-  const server = await startServer({ PORT: '3390', DB_PATH: join(dir, 'app.db'), CACHE_PATH: join(dir, 'cache.json'), LLM_API_KEY: key, LLM_MODEL: 'probe-model' })
+  const server = await startServer({ PORT: '3390', DATABASE_URL: `file:${join(dir, 'app.db')}`, CACHE_PATH: join(dir, 'cache.json'), LLM_API_KEY: key, LLM_MODEL: 'probe-model' })
   try {
     const res = await fetch(`${server.url}/api/assistant`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ message }) })
     assert(res.status === 200, `assistant HTTP ${res.status}`)

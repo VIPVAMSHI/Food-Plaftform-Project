@@ -16,13 +16,15 @@ const entrySchema = z.object({
     reasons: z.record(z.string(), z.string()),
   }),
 })
-const fileSchema = z.object({ version: z.literal(1), entries: z.record(z.string(), entrySchema) })
+export const cacheFileSchema = z.object({ version: z.literal(1), entries: z.record(z.string(), entrySchema) })
 
 export type CacheEntry = z.infer<typeof entrySchema>
 
 /**
- * Normalized query → answer. Pre-warmed with the demo script queries and persisted to a JSON file,
- * so a restart (or a dead LLM) still answers the demo instantly.
+ * Normalized query → answer, kept in memory (LRU).
+ * Starts from `seed` (the committed demo cache, bundled with the function) and, on the local server only,
+ * from `path`, which it also writes so live-model answers survive a restart. On Vercel `path` is null:
+ * the disk is read-only, and each instance keeps its own small in-memory cache.
  */
 export class AssistantCache {
   readonly #entries = new Map<string, CacheEntry>()
@@ -30,19 +32,22 @@ export class AssistantCache {
   constructor(
     private readonly path: string | null,
     private readonly maxEntries = 500,
+    seed: unknown = null,
   ) {
-    this.#load()
+    this.#add(seed)
+    if (this.path && existsSync(this.path)) {
+      try {
+        this.#add(JSON.parse(readFileSync(this.path, 'utf8')))
+      } catch {
+        // A corrupt cache file is ignored and rewritten on the next save.
+      }
+    }
   }
 
-  #load() {
-    if (!this.path || !existsSync(this.path)) return
-    try {
-      const parsed = fileSchema.safeParse(JSON.parse(readFileSync(this.path, 'utf8')))
-      if (!parsed.success) return
-      for (const [key, entry] of Object.entries(parsed.data.entries)) this.#entries.set(key, entry)
-    } catch {
-      // A corrupt cache file is ignored and rewritten on the next save.
-    }
+  #add(data: unknown) {
+    const parsed = cacheFileSchema.safeParse(data)
+    if (!parsed.success) return
+    for (const [key, entry] of Object.entries(parsed.data.entries)) this.#entries.set(key, entry)
   }
 
   get size(): number {
@@ -73,6 +78,11 @@ export class AssistantCache {
       this.#entries.delete(oldest)
     }
     this.#save()
+  }
+
+  /** Live-model entries only, in the file format. Used to build the committed demo cache. */
+  llmEntries(): z.infer<typeof cacheFileSchema> {
+    return { version: 1, entries: Object.fromEntries([...this.#entries].filter(([, entry]) => entry.origin === 'llm')) }
   }
 
   #save() {

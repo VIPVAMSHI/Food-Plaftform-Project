@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify'
 import { ZodError } from 'zod'
+import { DbUnavailable } from './db/index.js'
 
 /**
  * Every error response from the API has the same shape:
@@ -18,6 +19,9 @@ export type ErrorCode =
   | 'AI_KEY_FORMAT'
   | 'AI_KEY_REJECTED'
   | 'AI_KEY_ALREADY_SET'
+  | 'CLIENT_ID_REQUIRED'
+  | 'PLAN_LIMIT'
+  | 'DB_UNAVAILABLE'
   | 'INTERNAL'
 
 export class AppError extends Error {
@@ -42,6 +46,11 @@ export function sendError(reply: FastifyReply, request: FastifyRequest, code: Er
 export function errorHandler(error: FastifyError | Error, request: FastifyRequest, reply: FastifyReply) {
   if (error instanceof AppError) {
     return sendError(reply, request, error.code, error.statusCode, error.message)
+  }
+  if (error instanceof DbUnavailable) {
+    // The cause can name the database host; it goes to the log only.
+    request.log.error({ problem: error.problem, cause: error.detail instanceof Error ? error.detail.message : error.detail }, 'database unavailable')
+    return sendError(reply, request, 'DB_UNAVAILABLE', 503, "Saved plans and favorites can't be reached right now. Try again in a moment.")
   }
   if (error instanceof ZodError) {
     const first = error.issues[0]

@@ -16,10 +16,10 @@ async function audit(page: Page, name: string, project: string) {
 }
 
 test.describe('axe: zero critical or serious violations', () => {
-  test('every tab, the assistant, and every dialog', async ({ page }, info) => {
+  test('every tab, the assistant, and every dialog', async ({ page, api }, info) => {
     const project = info.project.name
-    await page.request.put('/api/favorites/canlis')
-    await page.request.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
+    await api.put('/api/favorites/canlis')
+    await api.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
     await openApp(page)
     await audit(page, 'discover', project)
 
@@ -70,7 +70,7 @@ async function tabTo(page: Page, target: Locator, maxPresses = 80) {
 }
 
 test.describe('keyboard only', () => {
-  test('ask the assistant and save a plan without a mouse', async ({ page }) => {
+  test('ask the assistant and save a plan without a mouse', async ({ page, api }) => {
     await openApp(page)
     await tabTo(page, page.getByTestId('open-assistant'))
     await page.keyboard.press('Enter')
@@ -97,7 +97,7 @@ test.describe('keyboard only', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('confirmation')).toHaveCount(0)
 
-    const plans = (await (await page.request.get('/api/plans')).json()).plans
+    const plans = (await (await api.get('/api/plans')).json()).plans
     expect(plans).toHaveLength(1)
     expect(plans[0].time).toBe(chosen)
   })

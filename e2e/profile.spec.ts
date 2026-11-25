@@ -47,8 +47,8 @@ test.describe('profile preferences', () => {
     await expect(page.getByTestId('profile-area').locator('option:checked')).toHaveText('Pioneer Square')
   })
 
-  test('saved places and dining plans open their pages', async ({ page }) => {
-    await page.request.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
+  test('saved places and dining plans open their pages', async ({ page, api }) => {
+    await api.post('/api/plans', { data: { placeId: 'wolf', date: daysAhead(0), time: '19:00' } })
     await openApp(page)
     await page.getByTestId('nav-user').click()
     await expect(page.getByTestId('profile-plans-link')).toContainText('1 plan')

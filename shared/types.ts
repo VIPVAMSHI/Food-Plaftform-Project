@@ -107,7 +107,7 @@ export type HealthResponse = {
 /** Whether the live AI assistant has an API key. The key itself is never sent to the browser. */
 export type AiStatus = {
   configured: boolean
-  provider: 'anthropic'
+  provider: 'google'
   model: string | null
   /** Show the "add an API key" prompt. Development only unless AI_KEY_PROMPT=on. */
   keyPromptEnabled: boolean
@@ -117,7 +117,7 @@ export type AiStatus = {
 
 export type SaveAiKeyResponse = {
   configured: true
-  /** False when Anthropic could not be reached to check the key; it was saved anyway. */
+  /** False when Google could not be reached to check the key; it was saved anyway. */
   verified: boolean
   /** False when the key could not be written to server/.env and only lasts until restart. */
   persisted: boolean

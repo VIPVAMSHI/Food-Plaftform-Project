@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react'
+import { isPlausibleGoogleKey } from '../../shared/llm-key'
 import { ApiError, api } from '../api/client'
 import { Icon } from '../icons'
 import { useDialog } from '../useDialog'
 import type { AiSetupState } from './useAiStatus'
 
-const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/
-const KEYS_URL = 'https://console.anthropic.com/settings/keys'
+const KEYS_URL = 'https://aistudio.google.com/apikey'
 
 function messageFor(error: unknown): string {
   if (!(error instanceof ApiError)) return 'The key could not be saved. Please try again.'
@@ -46,11 +46,11 @@ export function AiKeyPrompt({
     const trimmed = key.trim()
     setError('')
     if (!trimmed) {
-      setError('Paste your Anthropic API key first.')
+      setError('Paste your Google API key first.')
       return
     }
-    if (!KEY_PATTERN.test(trimmed)) {
-      setError('That does not look like an Anthropic API key. Keys start with "sk-ant-".')
+    if (!isPlausibleGoogleKey(trimmed)) {
+      setError('That does not look like a Google (Gemini) API key. Create one in Google AI Studio, and copy all of it.')
       return
     }
     setSaving(true)
@@ -60,7 +60,7 @@ export function AiKeyPrompt({
       if (!result.verified || !result.persisted) {
         setNotice(
           [
-            !result.verified && "Saved. Anthropic couldn't be reached to double-check the key, so it will be checked on first use.",
+            !result.verified && "Saved. Google couldn't be reached to double-check the key, so it will be checked on first use.",
             !result.persisted && 'The key is saved until the server restarts.',
           ]
             .filter(Boolean)
@@ -101,7 +101,7 @@ export function AiKeyPrompt({
         ) : (
           <>
             <p className="ai-key-copy">
-              <strong>Nothing is broken.</strong> The AI assistant is switched off because no Anthropic API key has been added to
+              <strong>Nothing is broken.</strong> The AI assistant is switched off because no Google (Gemini) API key has been added to
               this app yet. Until one is added, the assistant uses basic keyword matching, and this message appears each time
               someone uses it.
             </p>
@@ -113,7 +113,7 @@ export function AiKeyPrompt({
             ) : (
               <form onSubmit={submit}>
                 <label className="field">
-                  <span>Anthropic API key</span>
+                  <span>Google API key</span>
                   <div>
                     <Icon name="spark" />
                     <input
@@ -124,7 +124,7 @@ export function AiKeyPrompt({
                       spellCheck={false}
                       value={key}
                       onChange={(event) => setKey(event.target.value)}
-                      placeholder="sk-ant-…"
+                      placeholder="Paste your Gemini API key"
                       aria-invalid={Boolean(error)}
                       aria-describedby="ai-key-help"
                     />
@@ -138,7 +138,7 @@ export function AiKeyPrompt({
                 <p className="ai-key-help" id="ai-key-help">
                   Get a key at{' '}
                   <a href={KEYS_URL} target="_blank" rel="noreferrer">
-                    console.anthropic.com
+                    aistudio.google.com
                   </a>
                   . It goes straight to this app's server and is stored there, never in your browser, and it is never shown again.
                 </p>

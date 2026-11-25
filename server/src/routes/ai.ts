@@ -4,7 +4,8 @@ import type { AiStatus, SaveAiKeyResponse } from '../../../shared/types.js'
 import type { LlmProvider } from '../assistant/provider.js'
 import type { Env } from '../env.js'
 import { AppError, notFound } from '../errors.js'
-import { ANTHROPIC_KEY_PATTERN, type KeyCheck } from '../llm/anthropic.js'
+import { isPlausibleGoogleKey } from '../../../shared/llm-key.js'
+import type { KeyCheck } from '../llm/google.js'
 import type { LlmKeyStore } from '../llm/keyStore.js'
 import { RateLimiter } from '../rateLimit.js'
 
@@ -42,13 +43,13 @@ export const aiRoutes: FastifyPluginAsync<AiRoutesOptions> = async (app, { env, 
     }
 
     const { apiKey } = saveKeyBody.parse(request.body)
-    if (!ANTHROPIC_KEY_PATTERN.test(apiKey)) {
-      throw new AppError('AI_KEY_FORMAT', 400, 'That does not look like an Anthropic API key. Keys start with "sk-ant-".')
+    if (!isPlausibleGoogleKey(apiKey)) {
+      throw new AppError('AI_KEY_FORMAT', 400, 'That does not look like a Google (Gemini) API key. Create one in Google AI Studio, and copy all of it.')
     }
 
     const check = await verifyKey(apiKey)
     if (!check.ok && check.reason === 'rejected') {
-      throw new AppError('AI_KEY_REJECTED', 400, 'Anthropic did not accept that key. Check that you copied all of it, or create a new one.')
+      throw new AppError('AI_KEY_REJECTED', 400, 'Google did not accept that key. Check that you copied all of it, or create a new one.')
     }
 
     const { persisted } = keyStore.save(apiKey)

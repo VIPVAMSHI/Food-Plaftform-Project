@@ -12,7 +12,7 @@ import { Db } from './db/index.js'
 import { seedPlaces } from './db/seed.js'
 import type { Env } from './env.js'
 import { errorHandler, sendError } from './errors.js'
-import { anthropicProvider, verifyAnthropicKey, type KeyCheck } from './llm/anthropic.js'
+import { googleProvider, verifyGoogleKey, type KeyCheck } from './llm/google.js'
 import { LlmKeyStore } from './llm/keyStore.js'
 import { RateLimiter } from './rateLimit.js'
 import { aiRoutes } from './routes/ai.js'
@@ -66,8 +66,8 @@ export type App = FastifyInstance & { assistant: AssistantService; db: Db }
 export async function buildApp(env: Env, options: BuildOptions = {}): Promise<App> {
   const production = env.NODE_ENV === 'production'
   const keyStore = options.keyStore ?? new LlmKeyStore(env.LLM_API_KEY, env.NODE_ENV === 'test' ? null : ENV_FILE)
-  const verifyKey = options.verifyKey ?? verifyAnthropicKey
-  const provider = options.provider ?? anthropicProvider(keyStore, env.LLM_MODEL)
+  const verifyKey = options.verifyKey ?? verifyGoogleKey
+  const provider = options.provider ?? googleProvider(keyStore, env.LLM_MODEL)
   const ownsDb = !options.db
   const db = options.db ?? new Db(serverPath(env.DB_PATH))
   seedPlaces(db)
@@ -85,7 +85,7 @@ export async function buildApp(env: Env, options: BuildOptions = {}): Promise<Ap
             serializers: {
               req: (request) => ({ method: request.method, url: request.url, requestId: request.id }),
             },
-            redact: ['req.headers.authorization', 'req.headers["x-api-key"]', 'apiKey', '*.apiKey'],
+            redact: ['req.headers.authorization', 'req.headers["x-api-key"]', 'req.headers["x-goog-api-key"]', 'apiKey', '*.apiKey'],
           },
     genReqId: () => crypto.randomUUID(),
     bodyLimit: 32 * 1024,

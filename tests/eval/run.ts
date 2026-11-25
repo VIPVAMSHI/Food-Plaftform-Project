@@ -11,7 +11,7 @@ import { toAssistantPlace } from '../../shared/places'
 import type { AssistantResponse, TravelMode } from '../../shared/types'
 import { places } from '../../src/data/places'
 import { makeApp, offlineProvider } from '../api/helpers'
-import { anthropicProvider } from '../../server/src/llm/anthropic'
+import { googleProvider } from '../../server/src/llm/google'
 import { LlmKeyStore } from '../../server/src/llm/keyStore'
 import { EVAL_CASES, type EvalCase } from './queries'
 
@@ -97,7 +97,7 @@ if (skipLive) liveStatus = 'NOT RUN (--local-only)'
 else if (!key || !model) liveStatus = 'NOT RUN (no LLM_API_KEY / LLM_MODEL in server/.env)'
 else {
   for (let run = 1; run <= LIVE_RUNS; run++) {
-    live.push(...(await runAll(`live-${run}`, anthropicProvider(new LlmKeyStore(key, null), model))))
+    live.push(...(await runAll(`live-${run}`, googleProvider(new LlmKeyStore(key, null), model))))
   }
   liveStatus = `RUN (${model}, ${LIVE_RUNS} runs)`
 }

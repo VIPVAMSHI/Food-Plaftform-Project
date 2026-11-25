@@ -14,7 +14,8 @@ import { startServer } from '../chaos/server'
 const ROOT = resolve(import.meta.dirname, '../..')
 const OUT = join(ROOT, 'artifacts', 'security')
 const results: Array<{ name: string; ok: boolean; detail: string }> = []
-const REAL_KEY = /sk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_-]{20,}/
+// A real-looking Google API key (AIza + 35 characters) or Anthropic key. Test fixtures must not match this.
+const REAL_KEY = /(?:AIza[0-9A-Za-z_-]{35}|sk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_-]{20,})/
 
 async function step(name: string, fn: () => Promise<string> | string) {
   try {
@@ -98,17 +99,18 @@ await step('Front end: no secrets in VITE_ variables', () => {
 
 await step('Production logs contain neither the key nor user messages', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'sfd-sec-'))
-  const key = 'sk-ant-api03-SECURITYPROBE' + 'x'.repeat(40)
+  // Built from pieces so this file itself never contains a real-looking key.
+  const key = 'AIza' + 'SECURITYPROBE' + 'x'.repeat(30)
   const message = 'pasta under $30 my-private-message-7f3a'
   const server = await startServer({ PORT: '3390', DB_PATH: join(dir, 'app.db'), CACHE_PATH: join(dir, 'cache.json'), LLM_API_KEY: key, LLM_MODEL: 'probe-model' })
   try {
-    const res = await fetch(`${server.url}/api/assistant`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key }, body: JSON.stringify({ message }) })
+    const res = await fetch(`${server.url}/api/assistant`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ message }) })
     assert(res.status === 200, `assistant HTTP ${res.status}`)
     const body = await res.text()
     assert(!body.includes(key), 'key in response body')
     const health = await (await fetch(`${server.url}/api/health`)).text()
     const status = await (await fetch(`${server.url}/api/ai/status`)).text()
-    assert(!health.includes('sk-ant') && !status.includes('sk-ant'), 'key in health or status')
+    assert(!health.includes('AIza') && !status.includes('AIza'), 'key in health or status')
     await new Promise((r) => setTimeout(r, 300))
   } finally {
     await server.stop()

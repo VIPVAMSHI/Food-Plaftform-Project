@@ -74,8 +74,8 @@ export function candidateIds(request: LlmRequest): string[] {
   return [...request.user.matchAll(/"id":\s*"([^"]+)"/g)].map((match) => match[1])
 }
 
-/** A stand-in for api.anthropic.com on a random local port. */
-export async function fakeAnthropic(handler: (req: IncomingMessage, body: string, res: ServerResponse) => void) {
+/** A stand-in for generativelanguage.googleapis.com (the Gemini API) on a random local port. */
+export async function fakeGoogle(handler: (req: IncomingMessage, body: string, res: ServerResponse) => void) {
   let hits = 0
   const server = createServer((req, res) => {
     hits++

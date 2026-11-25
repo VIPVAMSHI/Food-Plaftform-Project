@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Fails if the built front end (dist/) contains anything that looks like a secret:
- * Anthropic/OpenAI-style keys, the LLM_API_KEY name, private keys, or the actual key from server/.env.
+ * Google/Anthropic/OpenAI-style keys, the LLM_API_KEY name, private keys, or the actual key from server/.env.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -14,10 +14,12 @@ if (!existsSync(join(dist, 'index.html'))) {
 }
 
 const patterns = [
+  [/AIza[0-9A-Za-z_-]{30,}/, 'Google API key'],
   [/sk-ant-[A-Za-z0-9_-]{10,}/, 'Anthropic API key'],
   [/sk-[A-Za-z0-9]{32,}/, 'OpenAI-style API key'],
   [/LLM_API_KEY/, 'LLM_API_KEY variable name'],
   [/x-api-key/i, 'x-api-key header'],
+  [/x-goog-api-key/i, 'x-goog-api-key header'],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'private key'],
   [/AKIA[0-9A-Z]{16}/, 'AWS access key'],
 ]

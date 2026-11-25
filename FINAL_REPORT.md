@@ -4,7 +4,7 @@
 
 **Demo-ready on a laptop. Not deployed, and AI runs without a live model, because of two blockers that need you:**
 
-1. **No LLM API key** in `server/.env`. The assistant works (cache plus local matcher, 3 picks with reasons), but the live-model eval and live preflight are NOT RUN. To fix it, add `LLM_API_KEY` and `LLM_MODEL=claude-haiku-4-5` to `server/.env` (or to Render), then run `npm run test:eval` and `npm run preflight`.
+1. **No LLM API key** in `server/.env`. The assistant works (cache plus local matcher, 3 picks with reasons), but the live-model eval and live preflight are NOT RUN. To fix it, add your Google (Gemini) key as `LLM_API_KEY`, with `LLM_MODEL=gemini-2.5-flash-lite`, to `server/.env` (or to Render), then run `npm run test:eval` and `npm run preflight`.
 2. **No deploy credentials.** `git push -u origin demo-final` failed with `fatal: could not read Username for 'https://github.com': terminal prompts disabled`. No Render, Fly or Railway login is available either. DEPLOY.md has copy-paste steps (about 10 minutes).
 
 Everything else below was run, and the output is pasted.
@@ -30,7 +30,7 @@ Bugs the tests found and fixed:
 - an unhandled rejection when the server dies mid-request;
 - a double close of the database.
 
-All decisions are listed in DECISIONS.md (items 1–34).
+All decisions are listed in DECISIONS.md (items 1–38).
 
 ## 3. Test evidence
 
@@ -61,7 +61,7 @@ Reports and screenshots are in `artifacts/` (gitignored):
 
 | Item | Why | Covered instead by |
 | --- | --- | --- |
-| Live LLM eval (3× each, p50/p95) | no API key | fake-Anthropic API tests (timeouts, retries, 401, 429, bad JSON, invented IDs); local eval 50/50 |
+| Live LLM eval (3× each, p50/p95) | no API key | fake-Google (Gemini) API tests (timeouts, retries, 401, 429, bad JSON, invented IDs); local eval 50/50 |
 | Preflight against the deployed URL | not deployed | preflight GREEN apart from the key, locally and in the clean room |
 | Deployed-URL e2e (`E2E_BASE_URL=…`) | not deployed | full suite locally |
 | Firefox | not one of the configured Playwright projects | Chrome and Safari engines |

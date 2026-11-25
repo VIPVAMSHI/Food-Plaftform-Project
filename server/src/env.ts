@@ -34,7 +34,7 @@ const envSchema = z
     DB_PATH: z.string().min(1).default('./data/bite.db'),
     CACHE_PATH: z.string().min(1).default('./data/assistant-cache.json'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-    LLM_PROVIDER: z.enum(['anthropic']).default('anthropic'),
+    LLM_PROVIDER: z.enum(['google']).default('google'),
     LLM_MODEL: optionalText,
     LLM_API_KEY: optionalSecret,
     /** Show the assistant's answer source (llm / cache / local) in the UI. */
@@ -46,7 +46,7 @@ const envSchema = z
   })
   .superRefine((env, ctx) => {
     if (env.LLM_API_KEY && !env.LLM_MODEL) {
-      ctx.addIssue({ code: 'custom', path: ['LLM_MODEL'], message: 'is required when LLM_API_KEY is set (for example claude-haiku-4-5)' })
+      ctx.addIssue({ code: 'custom', path: ['LLM_MODEL'], message: 'is required when LLM_API_KEY is set (for example gemini-2.5-flash-lite)' })
     }
   })
 

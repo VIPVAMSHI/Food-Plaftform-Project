@@ -145,11 +145,11 @@ await step('Corrupt database file → clear startup error, non-zero exit', async
 
 await step('Key without a model → clear startup error, non-zero exit', async () => {
   const { env } = dataEnv()
-  const server = await startServer({ ...env, LLM_API_KEY: 'sk-ant-chaos-key-0000000000000000000000' }, { waitForHealth: false })
+  const server = await startServer({ ...env, LLM_API_KEY: 'chaos-google-key-0000000000000000000000' }, { waitForHealth: false })
   const code = await waitForExit(server)
   assert(code === 1, `exit code ${code}`)
   assert(/LLM_MODEL/.test(server.logs()), 'message does not mention LLM_MODEL')
-  assert(!server.logs().includes('sk-ant-chaos-key'), 'the key was printed')
+  assert(!server.logs().includes('chaos-google-key'), 'the key was printed')
   return 'exit 1, mentions LLM_MODEL, key not printed'
 })
 

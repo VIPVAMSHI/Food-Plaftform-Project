@@ -10,7 +10,7 @@
    git push origin demo-ready-v1
    ```
 2. In https://dashboard.render.com: **New → Blueprint**, connect GitHub, pick `Food-Plaftform-Project`, branch `demo-final`. Render reads `render.yaml`.
-3. When asked for **LLM_API_KEY**, paste the Anthropic key, or leave it empty: the app works without it, using the cache and local matcher. Click **Apply**.
+3. When asked for **LLM_API_KEY**, paste your Google (Gemini) API key, or leave it empty: the app works without it, using the cache and local matcher. Click **Apply**.
 4. Wait for the deploy to finish (build is about 1–2 minutes). The service URL looks like `https://seattle-food-discovery.onrender.com`.
 5. From your laptop:
    ```bash

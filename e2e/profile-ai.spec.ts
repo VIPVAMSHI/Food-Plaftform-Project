@@ -4,8 +4,8 @@ import { expect, openApp, test } from './fixtures'
 
 const status = (configured: boolean, keyPromptEnabled: boolean) => ({
   configured,
-  provider: 'anthropic',
-  model: 'claude-haiku-4-5',
+  provider: 'google',
+  model: 'gemini-2.5-flash-lite',
   keyPromptEnabled,
   demoDebug: false,
 })
@@ -45,7 +45,7 @@ test.describe('profile: AI assistant setup row', () => {
     await row.click()
     const dialog = page.getByTestId('ai-key-prompt')
     await expect(dialog).toBeVisible()
-    await page.getByTestId('ai-key-input').fill('sk-ant-test_0123456789abcdefghij')
+    await page.getByTestId('ai-key-input').fill('test-google-key-0123456789abcdefghij')
     await page.getByTestId('ai-key-save').click()
     await expect(dialog).toHaveCount(0)
 

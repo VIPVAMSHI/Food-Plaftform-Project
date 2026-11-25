@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { googleProvider } from '../../server/src/llm/google'
+import { LlmKeyStore } from '../../server/src/llm/keyStore'
 import { makeApp, tempDir, writeDist, type TestApp } from './helpers'
 
 let current: TestApp | undefined
@@ -116,24 +118,61 @@ describe('errors, headers and static files', () => {
 
 describe('AI status and key endpoint', () => {
   it('reports configuration without ever returning a key', async () => {
-    const app = await start({ env: { LLM_API_KEY: 'sk-ant-test-secret-value-1234567890', LLM_MODEL: 'test-model' } })
+    const app = await start({ env: { LLM_API_KEY: 'test-google-secret-value-1234567890', LLM_MODEL: 'test-model' } })
     const res = await app.inject('/api/ai/status')
     expect(res.statusCode).toBe(200)
-    expect(res.body).not.toContain('sk-ant')
-    expect(res.json()).toMatchObject({ provider: 'anthropic', model: 'test-model' })
+    expect(res.body).not.toContain('test-google-secret')
+    expect(res.json()).toMatchObject({ provider: 'google', model: 'test-model' })
   })
 
   it('hides the key endpoint when the key prompt is off (the production default)', async () => {
     const app = await start({ env: { AI_KEY_PROMPT: 'off' } })
-    const res = await app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey: 'sk-ant-aaaaaaaaaaaaaaaaaaaaaaaaa' } })
+    const res = await app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey: 'test-google-key-aaaaaaaaaaaaaaaaaaaa' } })
     expect(res.statusCode).toBe(404)
   })
 
-  it('rejects malformed keys and keys the provider refuses', async () => {
-    const app = await start({ env: { AI_KEY_PROMPT: 'on' }, verifyKey: async () => ({ ok: false, reason: 'rejected' }) })
-    const bad = await app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey: 'hello' } })
-    expect(bad.json().error.code).toBe('AI_KEY_FORMAT')
-    const refused = await app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey: 'sk-ant-aaaaaaaaaaaaaaaaaaaaaaaaa' } })
+  it('rejects malformed keys, keys from another vendor, and keys Google refuses', async () => {
+    const verified: string[] = []
+    const app = await start({
+      env: { AI_KEY_PROMPT: 'on' },
+      verifyKey: async (key) => {
+        verified.push(key)
+        return { ok: false, reason: 'rejected' }
+      },
+    })
+    const post = (apiKey: string) => app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey } })
+    // Other vendors' key shapes are built at runtime so no key-looking literal sits in the repo (the security scan checks).
+    const anthropicShaped = ['sk', 'ant', 'api03', 'a'.repeat(28)].join('-')
+    const openAiShaped = ['sk', 'proj', 'a'.repeat(28)].join('-')
+    for (const apiKey of ['hello', 'has spaces in it but is long enough to pass the length check', anthropicShaped, openAiShaped]) {
+      const bad = await post(apiKey)
+      expect(bad.statusCode).toBe(400)
+      expect(bad.json().error.code).toBe('AI_KEY_FORMAT')
+      expect(bad.json().error.message).toContain('Google')
+    }
+    // Wrong-looking keys never reach Google.
+    expect(verified).toEqual([])
+    const refused = await post('test-google-key-aaaaaaaaaaaaaaaaaaaa')
     expect(refused.json().error.code).toBe('AI_KEY_REJECTED')
+    expect(refused.json().error.message).toContain('Google')
+    expect(verified).toEqual(['test-google-key-aaaaaaaaaaaaaaaaaaaa'])
+  })
+
+  it('accepts a key Google confirms, and never echoes it back', async () => {
+    // The real key store and Google provider, so /api/ai/status reflects what the saved key does.
+    const keyStore = new LlmKeyStore(undefined, null)
+    const app = await start({
+      env: { AI_KEY_PROMPT: 'on', LLM_MODEL: 'test-model' },
+      keyStore,
+      provider: googleProvider(keyStore, 'test-model'),
+      verifyKey: async () => ({ ok: true }),
+    })
+    expect((await app.inject('/api/ai/status')).json().configured).toBe(false)
+    const key = 'test-google-key-aaaaaaaaaaaaaaaaaaaa'
+    const res = await app.inject({ method: 'POST', url: '/api/ai/key', payload: { apiKey: key } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ configured: true, verified: true })
+    expect(res.body).not.toContain(key)
+    expect((await app.inject('/api/ai/status')).json().configured).toBe(true)
   })
 })

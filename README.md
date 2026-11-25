@@ -1,7 +1,7 @@
 # Seattle Food Discovery
 
 Pick where to eat in Seattle by budget, neighborhood, and time, ask a food assistant, and save dining plans and favorites.
-One Node service (Fastify + SQLite) serves the React app and the API. The assistant uses Anthropic when a key is set, and falls back to a cache and a local matcher otherwise.
+One Node service (Fastify + SQLite) serves the React app and the API. The assistant uses Google Gemini when a key is set, and falls back to a cache and a local matcher otherwise.
 
 ## Run
 

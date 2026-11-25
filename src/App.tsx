@@ -305,6 +305,12 @@ export default function App() {
   /** Open while AI is not set up (development only). `pending` is the message to send once the prompt closes. */
   const [keyPrompt, setKeyPrompt] = useState<{ pending: string | null } | null>(null)
 
+  // The profile shows whether AI is on, so re-ask the server each time that tab opens.
+  const refreshAi = ai.refresh
+  useEffect(() => {
+    if (tab === 'user') void refreshAi()
+  }, [tab, refreshAi])
+
   // A tab left open past midnight should not keep offering yesterday as the plan date.
   useEffect(() => {
     setDate((current) => (current < today ? today : current))
@@ -1222,6 +1228,21 @@ export default function App() {
                   {plans.length} plan{plans.length === 1 ? '' : 's'}
                 </strong>
               </button>
+              {/* Setup status is for whoever runs the app. It follows the server's AI_KEY_PROMPT setting, so a demo audience never sees it. */}
+              {ai.keyPromptEnabled &&
+                (ai.state === 'missing-key' ? (
+                  <button type="button" className="preference link" onClick={() => setKeyPrompt({ pending: null })} data-testid="profile-ai">
+                    <span>AI assistant</span>
+                    <strong>Off: add API key</strong>
+                    <small>No key yet, so answers use basic keyword matching.</small>
+                  </button>
+                ) : ai.state === 'ready' || ai.state === 'server-offline' ? (
+                  <div className="preference" data-testid="profile-ai">
+                    <span>AI assistant</span>
+                    <strong>{ai.state === 'ready' ? 'On' : 'Off: server not running'}</strong>
+                    <small>{ai.state === 'ready' ? 'Answers come from the live model. To change the key, edit server/.env.' : 'Start the app server to use AI.'}</small>
+                  </div>
+                ) : null)}
               <p className="profile-note">Area, budget and travel changes apply to Discover.</p>
             </div>
           )}

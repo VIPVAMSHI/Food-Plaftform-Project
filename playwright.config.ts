@@ -47,6 +47,8 @@ export default defineConfig({
           DB_PATH: `${DATA}/app.db`,
           CACHE_PATH: `${DATA}/assistant-cache.json`,
           LLM_API_KEY: '',
+          // Stage settings, whatever is in server/.env: the audience never sees the "add an API key" prompt.
+          AI_KEY_PROMPT: 'off',
           LOG_LEVEL: 'warn',
           DEMO_DEBUG: 'false',
         },
